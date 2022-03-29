@@ -1,0 +1,16 @@
+package calculations;
+
+public enum DataType {
+	
+	SEGMENT_CALCULATION(),
+	LINKSET_CALCULATION(),
+	FRAMESET_CALCULATION(),
+	DATASET_CALCULATON(),
+	
+	LINKSET_STATISTIC(),
+	FRAMESET_STATISTIC(),
+	DATASET_STATISTIC(),
+	
+	DataType () {	
+	}
+}
