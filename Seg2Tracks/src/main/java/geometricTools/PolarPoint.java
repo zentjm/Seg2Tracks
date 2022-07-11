@@ -20,7 +20,7 @@ public class PolarPoint implements Serializable {
 		this.theta = theta;
 	}
 	
-	//convert cartesian to polar with respect to origin at zero-zero
+	//convert Cartesian to polar with respect to origin at zero-zero
 	public PolarPoint (Point point) {
 		this.r = Math.sqrt((point.x * point.x) + (point.y * point.y));
 		this.theta = Math.atan2(point.y, point.x); //XXX: Need conversion for signs?
@@ -28,7 +28,7 @@ public class PolarPoint implements Serializable {
 		this.point = point;
 	}
 			  
-	//Convert cartesian to polar with respect to a new origin point
+	//Convert Cartesian to polar with respect to a new origin point
 	public PolarPoint (Point point, Point origin) {
 		double x = point.getX() - origin.getX();
 		double y = point.getY() - origin.getY();

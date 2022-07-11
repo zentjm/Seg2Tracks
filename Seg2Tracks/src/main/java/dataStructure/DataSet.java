@@ -143,9 +143,6 @@ public class DataSet implements Serializable {
 	//Operation methods
 	
 	public void removeSegment(SegmentModel deleteSegment) {
-		
-
-		
 		for (int i = 0; i < this.getFrameSetList().length; i++) {
 			for (int j = 0; j < this.getFrameSet(i).size(); j++) {
 				LinkSet linkSet = deleteSegment.getLinkSet();
@@ -155,10 +152,6 @@ public class DataSet implements Serializable {
 				linkSet.getDataSet().getLinkSetList().remove(linkSet);
 			}
 		}	
-		
-
-		
-		
 		
 		/*
 		//Remove segment from frameSets
@@ -180,5 +173,22 @@ public class DataSet implements Serializable {
 	}
 	
 	
+	/*
+	 * TODO: enums
+	 * 0: delete internalSegmentations
+	 * 1: delete externalSegmentations
+	 */
+	public void removeSegmentationType (int type) {
+		//TODO: Other components need to be integrated into this?
+		for (int i = 0; i < this.getFrameSetList().length; i++) {
+			for (Segment segment: this.getFrameSet(i)) {
+				if (type == 0) segment.setInternalPerimeter(null);
+				if (type == 1) segment.setExternalPerimeter(null);
+			}	
+		}
+		if (type == 0) this.setInternalSegmentationExists(false);
+		if (type == 1) this.setExternalSegmentationExists(false);
+		//if type exsts...
+	}
 
 }

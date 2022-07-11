@@ -35,7 +35,6 @@ public class InternalSegmentationSettings extends JFrame implements ActionListen
 	public InternalSegmentationSettings(OperationController controller) {
 		this.controller = controller;
 		checkBoxEdgeExclusion = new JCheckBox("Edge Exclusion", controller.getExcludeInternalEdges());
-		
 		createView();
 	}
 	
@@ -62,8 +61,6 @@ public class InternalSegmentationSettings extends JFrame implements ActionListen
 	    //Edge Exclusion Selection
 	    constraints.gridx = 0;
 	    panel.add(checkBoxEdgeExclusion, constraints);
-	    
-	    
 	    
 	    //Observers
 	    checkBoxEdgeExclusion.addActionListener(this);

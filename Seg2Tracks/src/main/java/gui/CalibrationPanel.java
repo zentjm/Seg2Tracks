@@ -135,9 +135,7 @@ public class CalibrationPanel extends JFrame implements ActionListener{
 			null, options, options[1]);
 			
 			if (choice == 1) return;
-			controller.clearData();
-			
-			
+			controller.clearData(2); //TODO: enum
 			
 		}
 	

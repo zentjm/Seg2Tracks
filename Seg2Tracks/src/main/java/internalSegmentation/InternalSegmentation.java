@@ -120,7 +120,6 @@ public abstract class InternalSegmentation {
 				GeometricCalculations.shortcutPerimeter(
 				GeometricCalculations.straightPerimeter(
 								points))));
-			
 			clean(segments.get(n));
 
 		}

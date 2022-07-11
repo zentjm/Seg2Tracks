@@ -41,6 +41,8 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 	//Condition Flags
 	boolean run = false;
 	boolean typing = false;
+	boolean internalButtonRunReady =  true;
+	boolean externalButtonRunReady =  true;
 	
 	//IO Data Buttons
 	JButton buttonLoad = new JButton ("Load");
@@ -306,10 +308,6 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 			controller.linkageSettings();
 		}
 		
-		if (e.getSource() == buttonSettingsInternal) {
-			controller.internalSegmentationSettings();
-		}
-		
 		if (e.getSource() == buttonSettingsExternal) {
 			controller.externalSegmentationSettings();
 		}
@@ -319,11 +317,12 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 		}
 		
 		if (e.getSource() == buttonRunInternal) {
-			controller.runInternalSegmentation();
+			controller.runInternalSegmentation();	
 		}
 		
 		if (e.getSource() == buttonRunExternal) {
 			controller.runExternalSegmentation();
+			//if (internalButtonRunReady) buttonRunInternal.setEnabled(controller.externalSegmentationExists());
 		}
 		
 		if (e.getSource() == buttonModifyInternal) {
@@ -349,12 +348,22 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 		
 		if (e.getSource() == comboBoxInternalSegment) {
 			controller.setComboBoxInternalSegmentation(comboBoxInternalSegment.getSelectedIndex());
+			
+			if (controller.isExternallyDependent()) {
+				if (!internalButtonRunReady) buttonRunInternal.setEnabled(true);
+				else buttonRunInternal.setEnabled(controller.externalSegmentationExists());
+			}
+			
+			/*
 			if (controller.isExternallyDependent()) {
 				buttonRunInternal.setEnabled(controller.externalSegmentationExists());
 			}
 			else {
 				buttonRunInternal.setEnabled(true);
 			}
+			*/
+			
+			
 		}
 		
 		if (e.getSource() == comboBoxExternalSegment) {
@@ -376,30 +385,68 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 		}
 	}
 	
+	//TODO: Split into two methods
 	//TODO: terms are confusing in this whole thing. Needs some work. 
 	//TODO: lock analysis until something is loaded
 	//TODO: Enums for labels (0: externalSegmentation, 1: internalSegmentation)
 	//TODO: Enums for commands (0: no file loaded, 1: run file loaded, 2: save file loaded)
 	public void updateSegmentationLoaded(int label, int setting) { 
-		//Choose external or internal seg label.
-		JLabel labelInfo = null;
-		if (label == 0) labelInfo = labelInfo2; {//external segmentation
-			labelInfo = labelInfo2;
-			buttonRunInternal.setEnabled(true);
-			
+		
+		//Internal segmentation
+		if (label == 1) {
+			if (setting == 0) {
+				buttonSave.setEnabled(false); //TODO: should be able to save if only one of the segmentations is cleared
+				labelInfo1.setText(" ");
+				buttonRunInternal.setText("Run");
+				internalButtonRunReady =  true;
+			}
+			if (setting == 1) {
+				labelInfo1.setText("Run Data Loaded");
+				buttonRunInternal.setText("Clear");
+				internalButtonRunReady =  false;
+			}
+			if (setting == 2) {
+				labelInfo1.setText("Save Data Loaded");
+				buttonRunInternal.setText("Clear");
+				internalButtonRunReady =  false;
+			}
+			if (setting == 3) {
+				labelInfo1.setText("Modified File Loaded");
+				buttonRunInternal.setText("Clear");
+				internalButtonRunReady =  false;
+			}
 		}
-		if (label == 1) labelInfo = labelInfo1; //internal segmentation
 		
-		if (setting == 0) { 
-			buttonSave.setEnabled(false); //TODO: should be able to save if only one of the segmentations is cleared
-			labelInfo.setText(" ");
+		
+		//External segmentation
+		if (label == 0) {
+			if (setting == 0) {
+				buttonSave.setEnabled(false); //TODO: should be able to save if only one of the segmentations is cleared
+				labelInfo2.setText(" ");
+				buttonRunExternal.setText("Run");
+				externalButtonRunReady =  true;
+			}
+			if (setting == 1) {
+				labelInfo2.setText("Run Data Loaded");
+				buttonRunExternal.setText("Clear");
+				externalButtonRunReady =  false;
+			}
+			if (setting == 2) {
+				labelInfo2.setText("Save Data Loaded");
+				buttonRunExternal.setText("Clear");
+				externalButtonRunReady =  false;
+			}
+			if (setting == 3) {
+				labelInfo2.setText("Modified File Loaded");
+				buttonRunExternal.setText("Clear");
+				externalButtonRunReady =  false;
+			}
 		}
 		
-		else buttonSave.setEnabled(true);
-		
-		if (setting == 1) labelInfo.setText("Run Data Loaded");
-		if (setting == 2) labelInfo.setText("Save Data Loaded");
-		if (setting == 3) labelInfo.setText("Modified File Loaded");
+		if (controller.isExternallyDependent()) {
+			if (!internalButtonRunReady) buttonRunInternal.setEnabled(true);
+			else buttonRunInternal.setEnabled(controller.externalSegmentationExists());
+		}
 	}
 	
 	

@@ -12,9 +12,9 @@ import ij.process.AutoThresholder;
 import ij.process.AutoThresholder.Method;
 import ij.process.ImageProcessor;
 
-public class OneWayContraction_Modified extends ExternalSegmentation {
+public class OneWayContraction_GradientDecent extends ExternalSegmentation {
 
-	public OneWayContraction_Modified() {
+	public OneWayContraction_GradientDecent() {
 		this.name = "One-Way Contraction_Gradient Descent";
 		this.description = " "; //TODO
 	}
@@ -376,10 +376,8 @@ public class OneWayContraction_Modified extends ExternalSegmentation {
 		return true;
 	}
 	
-	
-	
-	
-	 // check pixel in a given direction from vertex (x,y)
+
+	// check pixel in a given direction from vertex (x,y)
     private static Point getNeighbors(Point pt, int direction) {
     	direction = direction % 8;
     	int x = pt.x;

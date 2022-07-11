@@ -72,12 +72,10 @@ public class ExternalSegmentationSettings extends JFrame implements ActionListen
 	    //Edge Exclusion Selection
 	    constraints.gridx = 0;
 	    //panel.add(checkBoxEdgeExclusion, constraints); //TODO: maybe get rid of this?
-		
 	    
 	    //Observers
 	    buttonLoadFromOverlay.addActionListener(this);
 	    checkBoxEdgeExclusion.addActionListener(this);
-	    
 	    
 		//Finalize JFrame/JPanel
 		add(panel);

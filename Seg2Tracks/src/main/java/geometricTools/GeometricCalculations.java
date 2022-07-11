@@ -16,10 +16,7 @@ import ij.gui.Roi;
 import ij.process.ImageProcessor;
 
 public class GeometricCalculations {
-	
 
-	
-	
 	//Detects and removes static
 	public static Point[] attenuateStatic(Point[] pts) {
 		
@@ -704,6 +701,75 @@ public class GeometricCalculations {
 		
 		return pts2;
 	}
+	
+	
+	//TODO: curves between the outside, includes first point, does not include last point
+	/*
+	public static Point[] adaptivePerimeter (Point pt1, Point pt2, Point ptC) {
+			
+	
+			ArrayList<Point> newPts = new ArrayList<>();
+			newPts.add(pt1); //Adds first point
+			
+			//If pt out of bounds
+			// skip point but keep placehold
+			//if prev point out of bounce connect to most previous point through angle (acknowledge corners, trace edge)
+			
+			//calculate distances from points
+			double dist1 = Math.sqrt(Math.pow(pt1.x - ptC.x, 2) + Math.pow(pt1.y - ptC.y, 2));
+			double dist2 = Math.sqrt(Math.pow(pt2.x - ptC.x, 2) + Math.pow(pt2.y - ptC.y, 2));
+			
+			
+			ArrayList<Point> list = bresenham(pt1.x, pt1.y, pt2.x, pt2.y);
+			
+			
+			
+			for (int i = 0; i < list.size(); i++) {
+				int length = (int) (((i/list.size()) * dist1) + ((1 - (i/list.size())) * dist2));
+				
+				//TODO: this IS an expensive approach
+				PolarPoint temp = new PolarPoint (list.get(i), ptC);
+				double theta = temp.getTheta();
+				PolarPoint ptT = new PolarPoint(length, theta);
+				Point pt = ptT.getCartesian();
+				
+				
+			}
+			
+			
+			
+		
+			for (int  j = 1; j < pts.length; j ++) {
+				//Adds everything from this bresenham algorithm to the end of the list
+				//By finding all the points between each point and the next, 
+				
+				//newPts.addAll(bresenham(pts[j-1].x, pts[j-1].y, pts[j].x, pts[j].y));
+				
+				//testing
+				list = bresenham(pts[j-1].x, pts[j-1].y, pts[j].x, pts[j].y);
+				list.remove(0);
+				newPts.addAll(list);
+			}
+			
+			//Adds connects last point to first point
+			list = bresenham(pts[pts.length-1].x, pts[pts.length-1].y, pts[0].x, pts[0].y);
+			list.remove(0);
+			newPts.addAll(list);
+			
+			//converts to Point[]
+			Point[] pts2 = new Point[newPts.size()];
+			for (int j = 0; j < newPts.size(); j ++) {
+				pts2[j] = newPts.get(j);
+			}
+			
+			return pts2;
+		}
+	*/
+	
+	
+	
+	
+	
 	
 	//Provides pixels along a line
 	public static ArrayList<Point> bresenham(int x1, int y1, int x2, int y2) {

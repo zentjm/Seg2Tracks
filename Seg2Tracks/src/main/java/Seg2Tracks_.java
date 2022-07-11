@@ -63,7 +63,7 @@ import gui.Seg2TracksModel;
  */
 //public class Primes_ extends ImagePlus implements PlugIn
 
-@Plugin(type = Command.class, menuPath = "Analyze>Seg2Tracks")
+@Plugin(type = Command.class, menuPath = "Plugins>Segmentation>Seg2Tracks")
 public class Seg2Tracks_ implements Command {
 	
 
@@ -105,8 +105,7 @@ public class Seg2Tracks_ implements Command {
 
 		Seg2TracksModel model = new Seg2TracksModel();
 		Seg2TracksController controller = new Seg2TracksController(model);
-			
-		
+
 	}
 }	
 		

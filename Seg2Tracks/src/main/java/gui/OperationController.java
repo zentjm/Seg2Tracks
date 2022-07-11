@@ -56,8 +56,9 @@ public class OperationController {
 	
 	//DataSet acquisition and loading
 	DataSet dataSet;
-	boolean loadedInternalDataSet = false; //TODO: used?
-	boolean loadedData = false;
+	boolean loadedInternalData = false; //TODO: used?
+	boolean loadedExternalData = false;
+	//boolean loadedData = false;
 	String [] autoSaves;
 	
 	//General external segmentation settings
@@ -208,12 +209,47 @@ public class OperationController {
 	
 
 	//Clears dataSet
-	public void clearData() {
-		dataSet = null;
-		loadedData = false;
-		panel.updateSegmentationLoaded(0,0);
-		panel.updateSegmentationLoaded(1,0);
-		controller.allSegmentationLoaded();
+	/*
+	 * TODO:
+	 * 0: Clear internal  -> only internal
+	 * 1: Clear external  -> only external unless internally dependent. Clear internal if it is dependent (note with dialog)
+	 * 2: Clear all       -> reset dataSet
+	 * 	  If last cleared -> reset DataSet. 
+	 * 
+	 */
+	public void clearData(int choice) {
+		
+		//clear internal segmentation
+		if (choice == 0) {
+			if (!dataSet.getExternalSegmentationExists()) choice = 2;
+			else {
+				dataSet.removeSegmentationType(0);
+				loadedInternalData = false;
+				panel.updateSegmentationLoaded(1,0);
+			}
+			
+		}
+		
+		//clear external segmentation
+		if (choice == 1) {
+			if (!dataSet.getInternalSegmentationExists()) choice = 2;
+			else {
+				dataSet.removeSegmentationType(1);
+				loadedExternalData = false;
+				panel.updateSegmentationLoaded(0,0);
+			}
+		}
+		
+		//clear all segmentation
+		if (choice == 2)	 {
+			dataSet = null;
+			//loadedData = false;
+			loadedInternalData = false;
+			loadedExternalData = false;
+			panel.updateSegmentationLoaded(0,0);
+			panel.updateSegmentationLoaded(1,0);
+			controller.allSegmentationLoaded();
+		}
 	}
 	
 
@@ -252,7 +288,9 @@ public class OperationController {
 	//TODO: Enums. 0: externalSeg, 1: internalSeg
 	public void setRunData(int type, DataSet dataSet) {
 		this.dataSet = dataSet;
-		loadedData = true;
+		//loadedData = true;
+		if (type == 1) loadedInternalData = true;
+		if (type == 0) loadedExternalData = true;
 		panel.updateSegmentationLoaded(type, 1);
 		controller.allSegmentationLoaded();	
 	}
@@ -261,14 +299,18 @@ public class OperationController {
 	//TODO: Enums. 0: externalSeg, 1: internalSeg
 	public void setModifyData(int type, DataSet dataSet) {
 		this.dataSet = dataSet;
-		loadedData = true;
+		//loadedData = true;
+		if (type == 1) loadedInternalData = true;
+		if (type == 0) loadedExternalData = true;
 		panel.updateSegmentationLoaded(type, 3);
 		controller.allSegmentationLoaded();	
 	}
 	
 	public void setOverlayData(DataSet dataSet) {
 		this.dataSet = dataSet;
-		loadedData = true;
+		//loadedData = true;
+		loadedInternalData = true;
+		loadedExternalData = true;
 		panel.updateSegmentationLoaded(0, 2);
 		controller.allSegmentationLoaded();	
 	}
@@ -281,7 +323,8 @@ public class OperationController {
 	
 	//To create the calibration menu
 	public void calibrateChannel() {
-		CalibrationPanel calibrationView = new CalibrationPanel(this, loadedData);
+		//CalibrationPanel calibrationView = new CalibrationPanel(this, loadedData);
+		CalibrationPanel calibrationView = new CalibrationPanel(this, loadedInternalData || loadedExternalData);
 	}
 	
 	
@@ -291,18 +334,27 @@ public class OperationController {
 	}
 	
 	public void internalSegmentationSettings() {
-		InternalSegmentationSettings settings = new InternalSegmentationSettings(this);
+		InternalSegmentationSettings settingsIn = new InternalSegmentationSettings(this);
 	}
 	
 	public void externalSegmentationSettings() {
-		ExternalSegmentationSettings settings = new ExternalSegmentationSettings(this);
+		ExternalSegmentationSettings settingEx = new ExternalSegmentationSettings(this);
 	}
 	
 	//TODO: make external and internal runs inherited factory methods to get rid of runType parameter
 	public void runExternalSegmentation () {
-		if (dataSet != null) {
-			if (dataSet.getExternalSegmentationExists() && !panel.dialogAlert("Overwrite current external segmentation data?")) return;
+		
+		//Clear previous run
+		if (dataSet != null) { 
+			if (dataSet.getExternalSegmentationExists()) {
+				if (panel.dialogAlert("Clear current external segmentation data?")) {
+					clearData(1);
+				}
+				return;
+			}
 		}
+		
+		//
 		if (inputFilePath != null) { //TODO: block running if bad input path
 			System.out.println("Input File Path: " + inputFilePath);
 			model.runIt(0); //TODO: update use of run buttons as necessary
@@ -317,9 +369,22 @@ public class OperationController {
 	
 	///TODO:
 	public void runInternalSegmentation () {
+		
+		/*
 		if (dataSet != null) {
 			if (dataSet.getInternalSegmentationExists() && !panel.dialogAlert("Overwrite current internal segmentation data?")) return; //TODO: load data needs to be specific
 		}
+		*/
+		
+		if (dataSet != null) { 
+			if (dataSet.getInternalSegmentationExists()) {
+				if (panel.dialogAlert("Clear current internal segmentation data?")) {
+					clearData(0);
+				}
+				return;
+			}
+		}
+		
 		if (inputFilePath != null) { //TODO: block running if bad input path
 			System.out.println("Input File Path: " + inputFilePath);
 			model.runIt(1); //TODO: update use of run buttons as necessary
@@ -346,7 +411,8 @@ public class OperationController {
 			return;
 		}	
 		if (dataSet.getExternalSegmentationExists()) mSeg.runDataSet(dataSet); //TODO: Check Loaded External DataSet applies to any loaded data
-		if (mSeg.isDataLoaded()) loadedData = true;
+		//if (mSeg.isDataLoaded()) loadedData = true;
+		if (mSeg.isDataLoaded()) loadedExternalData = true;
 	}
 	
 	
@@ -385,24 +451,28 @@ public class OperationController {
 		if (dataSet != null) {
 			if (dataSet.getExternalSegmentationExists()) {
 				panel.updateSegmentationLoaded(0, 2);
-				loadedData = true;
+				//loadedData = true;
+				loadedExternalData = true;
 			}
 			if (dataSet.getInternalSegmentationExists()) {
 				panel.updateSegmentationLoaded(1, 2);
-				loadedData = true;
+				//loadedData = true;
+				loadedInternalData = true;
 			}
 		}
 		if (dataSet == null) {
 			panel.updateSegmentationLoaded(0, 0);
 			panel.updateSegmentationLoaded(1, 0);
-			loadedData = false;
+			//loadedData = false;
+			loadedInternalData = loadedExternalData = true;
 		}
 		controller.allSegmentationLoaded();		
 	}
 
 	//indicates if data has been loaded
 	public boolean isDataLoaded () {
-		return loadedData;
+		//return loadedData;
+		return loadedInternalData || loadedExternalData;
 	}
 	
 	//Autosave DataSet
