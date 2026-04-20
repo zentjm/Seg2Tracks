@@ -20,6 +20,10 @@ import javax.swing.SwingConstants;
 import calculations.Data;
 import calculations.DataType;
 
+/**
+ * Dialog window for configuring analysis parameters. Allows users to select which calculations
+ * (segment, linkset, frameset measurements and statistics) should be included in the final analysis results.
+ */
 public class AnalysisSettings extends JFrame implements ActionListener {
 
 	JTextPane buttonGeneralInfo = new JTextPane();

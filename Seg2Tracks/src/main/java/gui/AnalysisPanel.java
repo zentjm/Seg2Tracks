@@ -28,6 +28,11 @@ import javax.swing.event.DocumentListener;
 import util.FileSelectionPanel;
 import util.FileType;
 
+/**
+ * View component for the analysis panel. Displays UI controls for selecting analysis methods,
+ * specifying target files, mapping input channels to datasets, and running analysis on segmented images.
+ * Observes FileSelectionPanel changes and notifies the controller of user actions.
+ */
 public class AnalysisPanel extends JPanel implements ActionListener, Observer {
 	
 	GridBagConstraints constraints = new GridBagConstraints();
@@ -158,6 +163,7 @@ public class AnalysisPanel extends JPanel implements ActionListener, Observer {
 		//Add overlay checkbox
 		constraints.gridx = 3;
 		add(buttonSettings, constraints);
+		buttonSettings.setEnabled(false);
 		
 		//ROW 3
         constraints.gridy = 3;
@@ -195,7 +201,7 @@ public class AnalysisPanel extends JPanel implements ActionListener, Observer {
 		channelPanel.removeAll();
 		comboBoxChannelSelections.clear();
 		
-		System.out.println("Channel count is: " + channelNames.length);
+		//System.out.println("Channel count is: " + channelNames.length);
 		
 		GridBagConstraints constraints = new GridBagConstraints();
 		int row = 0;
@@ -231,7 +237,7 @@ public class AnalysisPanel extends JPanel implements ActionListener, Observer {
 		if (e.getSource() == comboBoxAnalysisMethod) {
 			controller.setAnalysisMethodSelection(comboBoxAnalysisMethod.getSelectedIndex());
 			updateChannelPanel();
-			System.out.println("Method selected is " + comboBoxAnalysisMethod.getSelectedIndex());
+			//System.out.println("Method selected is " + comboBoxAnalysisMethod.getSelectedIndex());
 		}
 		
 		//for (JComboBox comboBox: comboBoxChannelSelections) {

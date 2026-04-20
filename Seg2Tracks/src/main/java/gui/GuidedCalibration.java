@@ -19,6 +19,11 @@ import ij.plugin.Histogram;
 import ij.process.ImageProcessor;
 import ij.util.Tools;
 
+/**
+ * Automated calibration wizard for determining optimal Gaussian blur (sigma) parameter.
+ * Analyzes intensity distributions across segmented objects to calculate an appropriate sigma value
+ * that minimizes over/under-segmentation. Uses Gaussian curve fitting and image intensity analysis.
+ */
 public class GuidedCalibration {
 
 	OperationController controller;
@@ -130,7 +135,7 @@ public class GuidedCalibration {
 				}
 				
 				if (i == boundary.length -1) {
-					System.out.println("cAx: " + cA.x + "cAy: " + cA.y + "cBx: " + cA.x + "cBy: " + cA.y );
+					//System.out.println("cAx: " + cA.x + "cAy: " + cA.y + "cBx: " + cA.x + "cBy: " + cA.y );
 					Point[] tempPt = new Point[line.size()];
 					for (int j = 0; j < tempPt.length; j ++) {
 						tempPt[j] = line.get(j);
@@ -162,7 +167,7 @@ public class GuidedCalibration {
 			double diameter = (2 * radius) - 1;
 			double distance = averageIntensities.length;
 			double adjustment = diameter/distance;
-			System.out.println("Diameter: " + diameter + "   Distance: " + distance + "   Adjustment:   " + adjustment);
+			//System.out.println("Diameter: " + diameter + "   Distance: " + distance + "   Adjustment:   " + adjustment);
 			
 			
 			//TEST single object
@@ -175,13 +180,13 @@ public class GuidedCalibration {
 			
 			
 			//Calculate sigma
-			System.out.println("Sigma for segment " + segment.getLinkSet().getName() + " is: " + calculateSigma(averageIntensities, adjustment));
+			//System.out.println("Sigma for segment " + segment.getLinkSet().getName() + " is: " + calculateSigma(averageIntensities, adjustment));
 			sigma += calculateSigma(averageIntensities, adjustment);
 			
 
 			
 		}
-		System.out.println("Sigma over frameSet Size:  " + sigma/(double)frameSet.size());
+		//System.out.println("Sigma over frameSet Size:  " + sigma/(double)frameSet.size());
 		return (sigma/(double)frameSet.size());
 	}
 	

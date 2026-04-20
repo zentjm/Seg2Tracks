@@ -11,6 +11,11 @@ import ij.gui.StackWindow;
 
 
 
+/**
+ * Custom ImageJ StackWindow for manual segmentation. Extends ImageJ's StackWindow to allow
+ * dynamic control over user input (mouse wheel, slice selector) during interactive segmentation workflows.
+ * Can disable these controls during drawing phases and re-enable them during navigation/menu phases.
+ */
 public class ManualSegmentationWindow extends StackWindow {
 	
 	ManualSegmentationController controller;

@@ -19,6 +19,12 @@ import javax.swing.event.DocumentListener;
 
 import gui.AnalysisPanel;
 
+/**
+ * Reusable Swing panel component for file/directory selection with validation.
+ * Provides a text field and button for selecting a directory path. Validates the selected path
+ * (checks if it exists, contains files, contains single file, or contains multiple files) using
+ * a debounced timer. Notifies observers when file selection state changes via Observable pattern.
+ */
 public class FileSelectionPanel extends Observable implements ActionListener, DocumentListener {
 	JButton buttonFile;
 	JTextField textFieldFile;
@@ -96,7 +102,7 @@ public class FileSelectionPanel extends Observable implements ActionListener, Do
 	@Override
 	public void actionPerformed(ActionEvent e) {
 		if (e.getSource() == timer) {
-			System.out.println("Stopped typing");
+			//System.out.println("Stopped typing");
 			typing = false;
 			timer.stop(); 
 			checkFileValidity();
@@ -172,7 +178,7 @@ public class FileSelectionPanel extends Observable implements ActionListener, Do
 	public void updateModel() {
 		setChanged();
 		notifyObservers();
-		System.out.println("File Selection Updated");
+		//System.out.println("File Selection Updated");
 	}
 	
 	

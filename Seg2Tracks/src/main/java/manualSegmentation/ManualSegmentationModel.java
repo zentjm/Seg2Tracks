@@ -10,6 +10,11 @@ import dataStructure.LinkSet;
 import dataStructure.Segment;
 import ij.process.FloatPolygon;
 
+/**
+ * Model for manual segmentation session. Manages the state of manually drawn/edited segments,
+ * linkages, and frame-by-frame progression during interactive segmentation. Contains placeholder
+ * documentation outlining the intended UI panel hierarchy and workflow states.
+ */
 public class ManualSegmentationModel {
 
 	/*STATES
@@ -98,7 +103,7 @@ public class ManualSegmentationModel {
 		//Construct geometric centerpoint
 		Rectangle rect = floatPolygon.getBounds();
 		Point centerpoint = new Point (rect.x + (rect.width / 2), rect.y + (rect.height / 2));
-		System.out.println("CenterPoint is... x:" + centerpoint.x + "   y:"  + centerpoint.y);
+		//System.out.println("CenterPoint is... x:" + centerpoint.x + "   y:"  + centerpoint.y);
 		
 		//Construct the SegmentModel
 		Segment segment = new Segment(frame, centerpoint);

@@ -87,7 +87,7 @@ public class ModifiedAutoThresholder {
     
     int GHT(int [] data) {
         
-    	System.out.println("Running Otsu Bounded");
+    	//System.out.println("Running Otsu Bounded");
     	
     	// Otsu's threshold algorithm
         // C++ code by Jordan Bevik <Jordan.Bevic@qtiworld.com>
@@ -844,7 +844,7 @@ public class ModifiedAutoThresholder {
     
     int OtsuBounded(int [] data) {
        
-    	System.out.println("Running Otsu Bounded");
+    	//System.out.println("Running Otsu Bounded");
     	
     	// Otsu's threshold algorithm
         // C++ code by Jordan Bevik <Jordan.Bevic@qtiworld.com>

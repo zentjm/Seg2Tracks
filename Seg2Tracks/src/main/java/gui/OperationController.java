@@ -11,6 +11,8 @@ import java.io.ObjectOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
 import java.util.prefs.Preferences;
 
 import javax.swing.JComboBox;
@@ -21,14 +23,21 @@ import javax.swing.SwingWorker;
 import javax.swing.Timer;
 
 import dataStructure.DataSet;
-import externalSegmentation.ExternalSegmentation;
-import internalSegmentation.InternalSegmentation;
 import linkage.Linkage;
 import manualSegmentation.ManualSegmentationController;
+import manualSegmentation.RecursionManualController;
+import sarn.Sarn;
+import segmentation.Segmentation;
 import util.FileResourcesUtil;
 import util.FileSelectionPanel;
 import util.Seg2TracksClassLoader;
 
+/**
+ * Controller for the segmentation operation panel. Manages the entire segmentation workflow including
+ * identification (object detection), external segmentation (SARN), internal segmentation, linkage,
+ * and post-segmentation filtering. Coordinates with OperationPanel and OperationModel following MVC pattern.
+ * Supports multiple operation panels for recursive/subsegmentation workflows.
+ */
 public class OperationController {
 	
 	Seg2TracksController controller;
@@ -41,8 +50,8 @@ public class OperationController {
 	
 	//Plugin Segmentation/Linkage
 	Linkage [] linkageMethods;
-	InternalSegmentation [] internalSegmentationMethods;
-	ExternalSegmentation [] externalSegmentationMethods;
+	Segmentation [] internalSegmentationMethods;
+	Sarn [] externalSegmentationMethods;
 	
 	//Loaded and Saved main inputs
 	String inputField;
@@ -53,6 +62,7 @@ public class OperationController {
 	int externalSegmentationSelection;
 	double gaussianBlurSigma;
 	double maximumFinderTolerance;
+	boolean invertIntensity;
 	
 	//DataSet acquisition and loading
 	DataSet dataSet;
@@ -65,21 +75,29 @@ public class OperationController {
 	boolean excludeExternalEdges;
 	boolean excludeInternalEdges;
 	
-	
 	//General internal segmentation settings
 	boolean internalEdgeExclusion;
+	
+	//Allow this controller to subsegment another
+	boolean subsegmentOption = false;
+	int subsegmentSelection = -1; // index into getDataSetNames(); -1 = not yet selected
+	
+	//Operation threads
+	SwingWorker runExternalSegmentation;
+	SwingWorker runInternalSegmentation;
 	
 	
 	//Hold whether current External Method is interactive
 	boolean automatic; 
 
-	public OperationController(Seg2TracksController controller, OperationModel model, int panelNumber) {
+	public OperationController(Seg2TracksController controller, OperationModel model, int panelNumber, boolean initialLoad) {
 		this.controller = controller;
 		this.panelNumber = panelNumber;
 		this.model = model;
 		loadPlugins();
 		loadSettings(); //TODO: make settings reset if plugin class is added or removed
 		model.setController(this);
+		// subsegmentOption is driven entirely by the user ticking the checkbox; no default
 		panel = new OperationPanel(this, model, panelNumber);
 	}
 	
@@ -87,21 +105,22 @@ public class OperationController {
 	public void loadPlugins() {
 		Seg2TracksClassLoader classLoader = new Seg2TracksClassLoader(); //TODO: push this up to the Seg2TracksController
 		linkageMethods = classLoader.getLinkageMethods();
-		internalSegmentationMethods = classLoader.getInternalSegmentationMethods();
-		externalSegmentationMethods = classLoader.getExternalSegmentationMethods();
+		internalSegmentationMethods = classLoader.getSegmentationMethods();
+		externalSegmentationMethods = classLoader.getSarnMethods();
 	}
 	
 	//load from preferences
 	public void loadSettings() {
 		inputField = preferences.get("INPUT_FILE_PATH" + panelNumber, "Insert Input File Path");
-		linkageSelection = preferences.getInt("LINKAGE_SELECTION" + panelNumber, 0);
+		linkageSelection = preferences.getInt("LINKAGE_SELECTION" + panelNumber, 1); // default: ModifiedHungarian (index 1)
 		internalSegmentationSelection = preferences.getInt("INTERNAL_SEGMENTATION_SELECTION" + panelNumber, 0);
 		externalSegmentationSelection = preferences.getInt("EXTERNAL_SEGMENTATION_SELECTION" + panelNumber, 0);
 		gaussianBlurSigma = preferences.getDouble("GAUSSIAN_BLUR_SIGMA" + panelNumber, 20);
 		maximumFinderTolerance = preferences.getDouble("MAXIMUM_FINDER_TOLERANCE" + panelNumber, 15);
+		invertIntensity = preferences.getBoolean("INVERT_INTENSITY" + panelNumber, false);
 		dataSetName = preferences.get("DATASET_NAME" + panelNumber, "DataSet" + panelNumber);
-		excludeInternalEdges =  preferences.getBoolean("EXCLUDE_INTERNAL_EDGES" + panelNumber, true);
-		excludeExternalEdges =  preferences.getBoolean("EXCLUDE_EXTERNAL_EDGES" + panelNumber, true);
+		excludeInternalEdges =  preferences.getBoolean("EXCLUDE_INTERNAL_EDGES" + panelNumber, false);
+		//excludeExternalEdges =  preferences.getBoolean("EXCLUDE_EXTERNAL_EDGES" + panelNumber, false);
 	}
 	
 	//save to preferences
@@ -112,9 +131,10 @@ public class OperationController {
 		preferences.putInt("EXTERNAL_SEGMENTATION_SELECTION" + panelNumber, externalSegmentationSelection);	
 		preferences.putDouble("GAUSSIAN_BLUR_SIGMA" + panelNumber, gaussianBlurSigma);
 		preferences.putDouble("MAXIMUM_FINDER_TOLERANCE" + panelNumber, maximumFinderTolerance);
+		preferences.putBoolean("INVERT_INTENSITY" + panelNumber, invertIntensity);
 		preferences.put("DATASET_NAME" + panelNumber, dataSetName);
 		preferences.putBoolean("EXCLUDE_INTERNAL_EDGES" + panelNumber, excludeInternalEdges);
-		preferences.putBoolean("EXCLUDE_EXTERNAL_EDGES" + panelNumber, excludeExternalEdges);
+		//preferences.putBoolean("EXCLUDE_EXTERNAL_EDGES" + panelNumber, excludeExternalEdges);
 	}
 
 	//setters for settings
@@ -136,15 +156,23 @@ public class OperationController {
 	
 	public void setGaussianBlurSigma(double gaussianBlurSigma) {
 		this.gaussianBlurSigma = gaussianBlurSigma;
-	}
-	
-	public void setMaximumFinderTolerance(double maximumFinderTolerance) {
-		this.maximumFinderTolerance = maximumFinderTolerance;
+		saveSettings();
 	}
 
-	
-	
-	
+	public void setMaximumFinderTolerance(double maximumFinderTolerance) {
+		this.maximumFinderTolerance = maximumFinderTolerance;
+		saveSettings();
+	}
+
+	public boolean getInvertIntensity() {
+		return invertIntensity;
+	}
+
+	public void setInvertIntensity(boolean invertIntensity) {
+		this.invertIntensity = invertIntensity;
+		saveSettings();
+	}
+
 	//getters for settings
 	public String getInputField() {
 		return inputField;
@@ -178,7 +206,6 @@ public class OperationController {
 		return controller.getProgressBar();
 	}
 	
-	
 	//Gets Linkage/Segmentation names for panel display
 	public String[] getLinkageMethodNames() {
 		String [] names = new String [linkageMethods.length];
@@ -202,6 +229,16 @@ public class OperationController {
 			names[i] = externalSegmentationMethods[i].toString();
 		}
 		return names;
+	}
+	
+	//for datasets
+	public String[] getDataSetNames() {
+		return controller.getDataSetNames();
+	}
+	
+	
+	public void cancelExternalRun() {
+		
 	}
 	
 	
@@ -248,6 +285,8 @@ public class OperationController {
 			loadedExternalData = false;
 			panel.updateSegmentationLoaded(0,0);
 			panel.updateSegmentationLoaded(1,0);
+			// Unlock subsegmentation controls so the user can uncheck and swap back if desired
+			if (subsegmentOption) panel.setSubsegmentationLocked(false);
 			controller.allSegmentationLoaded();
 		}
 	}
@@ -258,11 +297,11 @@ public class OperationController {
 		return linkageMethods[linkageSelection];
 	}
 	
-	public InternalSegmentation getInternalSegmentationMethod() {
+	public Segmentation getInternalSegmentationMethod() {
 		return internalSegmentationMethods[internalSegmentationSelection];
 	}
 	
-	public ExternalSegmentation getExternalSegmentationMethod() {
+	public Sarn getExternalSegmentationMethod() {
 		return externalSegmentationMethods[externalSegmentationSelection];
 	}
 	
@@ -292,7 +331,9 @@ public class OperationController {
 		if (type == 1) loadedInternalData = true;
 		if (type == 0) loadedExternalData = true;
 		panel.updateSegmentationLoaded(type, 1);
-		controller.allSegmentationLoaded();	
+		// Lock subsegmentation controls once a recursive run has completed successfully
+		if (subsegmentOption) panel.setSubsegmentationLocked(true);
+		controller.allSegmentationLoaded();
 	}
 	
 	//for loading a dataSet from Operation Model modify
@@ -327,7 +368,6 @@ public class OperationController {
 		CalibrationPanel calibrationView = new CalibrationPanel(this, loadedInternalData || loadedExternalData);
 	}
 	
-	
 	public void linkageSettings() {
 		//construct a VC linkage window
 		//link data to the model
@@ -340,10 +380,13 @@ public class OperationController {
 	public void externalSegmentationSettings() {
 		ExternalSegmentationSettings settingEx = new ExternalSegmentationSettings(this);
 	}
+
 	
-	//TODO: make external and internal runs inherited factory methods to get rid of runType parameter
+
+	//TODO: make external and internal runs inherited factory methods to get rid of runType paramete
 	public void runExternalSegmentation () {
 		
+		//NO THREAD
 		//Clear previous run
 		if (dataSet != null) { 
 			if (dataSet.getExternalSegmentationExists()) {
@@ -354,20 +397,61 @@ public class OperationController {
 			}
 		}
 		
-		//
-		if (inputFilePath != null) { //TODO: block running if bad input path
-			System.out.println("Input File Path: " + inputFilePath);
-			model.runIt(0); //TODO: update use of run buttons as necessary
-			controller.allSegmentationLoaded();
-		}
+		//TODO: effective use of a cancel button
 		
+		if (inputFilePath != null) { //TODO: block running if bad input path
+			//System.out.println("Input File Path: " + inputFilePath);
+		
+			//THREAD
+			runExternalSegmentation = runExternalSegmentationThread();
+			runExternalSegmentation.execute();
+			//panel.updateSegmentationLoaded(0, 4); //TODO: effective use of a cancel button
+		}
 		else System.out.println("Input Path null");
-		//generate external segmentation factory and run
-		//link model progress bar to view	
+		
 	}
 	
 	
-	///TODO:
+	public SwingWorker runExternalSegmentationThread() {
+		return new SwingWorker<Void, Integer>() {
+			@Override
+			public Void doInBackground() throws Exception {	
+				try {
+					model.runIt(0); 
+					return null;
+				}
+				catch (InterruptedException e) {
+					System.out.println("INTERRUPTED");
+					if (isCancelled()) {
+						System.out.println("CANCELLED");
+					};
+					return null;
+				}
+				catch (Exception e) {
+					System.err.println("[Seg2Tracks] External segmentation failed:");
+					e.printStackTrace();
+					controller.allSegmentationLoaded();
+					return null;
+				}
+				
+			}
+		};
+	}
+	
+	
+	
+	
+	public void cancelExternalSegmentation() {
+		runExternalSegmentation.cancel(true);
+		if (runExternalSegmentation.isCancelled()) System.out.println("IS CANCELLED");
+		panel.updateSegmentationLoaded(0, 1);
+	}
+		
+
+	
+	
+	 
+	/// This is used
 	public void runInternalSegmentation () {
 		
 		/*
@@ -386,37 +470,72 @@ public class OperationController {
 		}
 		
 		if (inputFilePath != null) { //TODO: block running if bad input path
-			System.out.println("Input File Path: " + inputFilePath);
-			model.runIt(1); //TODO: update use of run buttons as necessary
-			controller.allSegmentationLoaded();
+			//System.out.println("Input File Path: " + inputFilePath);
+			
+			//THREAD
+			runInternalSegmentation = runInternalSegmentationThread();
+			runInternalSegmentation.execute();
+			panel.updateSegmentationLoaded(1, 4);
 		}
 		
 		else System.out.println("Input Path null");
-		
-		
-		
-		//generate internal segmentation factory and run
-		//link model progress bar to view
-		//link error reporting to view
-		//update status on view
 	}
 	
+	public SwingWorker runInternalSegmentationThread() {
+		return new SwingWorker<Void, Integer>() {
+			@Override
+			public Void doInBackground() {	
+				try {
+					model.runIt(1); 
+					controller.allSegmentationLoaded();
+					return null;
+				}
+				catch (Exception e) {
+					System.err.println("[Seg2Tracks] Internal segmentation failed:");
+					e.printStackTrace();
+					controller.allSegmentationLoaded();
+					if (isCancelled()) {};
+					return null;
+				}
+			
+			}
+		};
+	}
 	
 	//Runs the manual editing over external segmentation //TODO: merge method with internal segmentation?
 	public void runModifyExternal() {
+
+		// When subsegmentation is active, always open RecursionManualController.
+		// It shows existing automated results (from a prior SARN run) via
+		// drawExistingResults(), which reads parentCell.getChildDataSet(), so the
+		// user can inspect and correct per-cell even after running automatic SARN.
+		if (subsegmentOption) {
+			DataSet priorDataSet = getPriorDataSet();
+			if (priorDataSet == null || priorDataSet.getLinkSetList().isEmpty()) {
+				errorMessage("No parent segmentation found. "
+						+ "Complete segmentation on the selected dataset before running "
+						+ "recursive manual segmentation.");
+				return;
+			}
+			RecursionManualController recSeg = new RecursionManualController(this, priorDataSet);
+			recSeg.run();
+			return;
+		}
+
+		// Standard (non-recursive) manual SARN editing
 		ManualSegmentationController mSeg = new ManualSegmentationController(0, this, true); //TODO: enum
 		if (inputFilePath == null) return; //TODO: block running if bad input path by deactivating button
-		if (dataSet == null || !dataSet.getExternalSegmentationExists()) {  
+		if (dataSet == null || !dataSet.getExternalSegmentationExists()) {
 			mSeg.runDataSet();
 			return;
-		}	
+		}
 		if (dataSet.getExternalSegmentationExists()) mSeg.runDataSet(dataSet); //TODO: Check Loaded External DataSet applies to any loaded data
 		//if (mSeg.isDataLoaded()) loadedData = true;
 		if (mSeg.isDataLoaded()) loadedExternalData = true;
 	}
 	
 	
-	//Runs manual editing over internal segmentation //TODO: Change this into a dependency checkbox. 
+	//Runs manual preview over internal segmentation //TODO: Change this into a dependency checkbox. 
 	public void runModifyInternal() {
 		ManualSegmentationController mSeg = new ManualSegmentationController(1, this, false); //TODO: enum for runType TODO: no runtype, only outer bounds
 		if (inputFilePath == null) return; //TODO: block running if bad input path by deactivating button
@@ -436,7 +555,6 @@ public class OperationController {
 		if (dataSet != null) return dataSet.getExternalSegmentationExists();
 		return false;
 	}
-	
 	
 	
 	//Loads DataSet
@@ -500,9 +618,11 @@ public class OperationController {
 
 	
 	//Edge Exclusion Settings
+	/*
 	public void setExcludeExternalEdges(boolean excludeExternalEdges) {
 		this.excludeExternalEdges = excludeExternalEdges;
 	}
+	*/
 	
 	public void setExcludeInternalEdges(boolean excludeInternalEdges) {
 		this.excludeInternalEdges = excludeInternalEdges;
@@ -517,10 +637,81 @@ public class OperationController {
 	}
 	
 	
-	
-	
+
 	//Internal Segmentation Settings
 
+	
+	
+	//Subsegmentation Settings
+	public boolean getSubsegmentation() {
+		return subsegmentOption;
+	}
+
+	// Called when the user ticks or unticks the subsegmentation checkbox.
+	// Swaps the model between RecursionOperationModel (checked) and OperationModel (unchecked).
+	public void setSubsegmentationEnabled(boolean enabled) {
+		subsegmentOption = enabled;
+		if (enabled) {
+			model = new RecursionOperationModel(panelNumber);
+		} else {
+			model = new OperationModel(panelNumber);
+		}
+		model.setController(this);
+	}
+
+	// Called when the user selects a dataset in the subsegmentation combobox
+	// index corresponds to the position in the array returned by getDataSetNames()
+	public void setSubsegmentationSelection(int index) {
+		subsegmentSelection = index;
+	}
+
+	// Returns the index of the dataset selected for subsegmentation (-1 if none)
+	public int getSubsegmentationSelection() {
+		return subsegmentSelection;
+	}
+
+	/**
+	 * Called by Seg2TracksController whenever any panel's dataset changes.
+	 * Passes the current dataset name list down to the panel so it can
+	 * enable/disable the subsegmentation controls accordingly.
+	 */
+	public void refreshSubsegmentation() {
+		String[] names = getDataSetNames();
+		boolean anyHasInternal = false;
+		DataSet[] all = controller.getDataSets();
+		if (all != null) {
+			for (DataSet ds : all) {
+				if (ds != null && ds.getInternalSegmentationExists()) {
+					anyHasInternal = true;
+					break;
+				}
+			}
+		}
+		panel.refreshSubsegmentation(names, anyHasInternal);
+	}
+
+	//Getter for priorDataSet in recursion — returns the user-selected dataset when
+	//subsegmentation is active, otherwise falls back to the immediately prior panel.
+	// NOTE: getDataSetNames() returns a compacted array of only non-null datasets,
+	// so subsegmentSelection indexes into that compacted list, not getDataSets() directly.
+	// We re-walk the full array here to find the nth non-null entry to stay in sync.
+	public DataSet getPriorDataSet() {
+		DataSet[] dataSets = controller.getDataSets();
+		if (subsegmentOption && subsegmentSelection >= 0) {
+			int count = 0;
+			for (DataSet ds : dataSets) {
+				if (ds == null) continue;
+				if (count == subsegmentSelection) return ds;
+				count++;
+			}
+		}
+		// Fallback: panel immediately before this one
+		if (panelNumber > 0 && panelNumber - 1 < dataSets.length) {
+			return dataSets[panelNumber - 1];
+		}
+		return null;
+	}
+	
 	
 	
 	

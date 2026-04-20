@@ -19,6 +19,11 @@ import javax.swing.JTextField;
 import util.FileSelectionPanel;
 import util.FileType;
 
+/**
+ * The top header panel of the main Seg2Tracks window. Displays citation reference, help button,
+ * and output file selection controls. Changes layout between segmentation mode (minimal) and
+ * analysis mode (with output directory picker).
+ */
 public class HeadPanel extends JPanel implements ActionListener, Observer {
 
 	GridBagConstraints constraints = new GridBagConstraints();

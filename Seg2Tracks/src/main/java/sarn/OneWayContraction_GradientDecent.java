@@ -1,25 +1,36 @@
-package externalSegmentation;
+package sarn;
 
 import java.awt.Point;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Stack;
 
-import externalSegmentation.ExternalSegmentation.PointSet;
 import geometricTools.GeometricCalculations;
-import ij.ImagePlus;
 import ij.process.AutoThresholder;
 import ij.process.AutoThresholder.Method;
-import ij.process.ImageProcessor;
+import sarn.Sarn.PointSet;
 
-public class OneWayContraction_GradientDecent extends ExternalSegmentation {
+/**
+ * One-Way Contraction with Gradient Descent SARN method implementation.
+ */
+public class OneWayContraction_GradientDecent extends Sarn {
 
+	/**
+	 * Initializes the One-Way Contraction with Gradient Descent method with default parameters.
+	 */
 	public OneWayContraction_GradientDecent() {
 		this.name = "One-Way Contraction_Gradient Descent";
 		this.description = " "; //TODO
 	}
 
-	@Override //Collects the internal points that should be used
+	//Collects the internal points that should be used
+	/**
+	 * Returns the marker point for the current segment as the sole inner reference point.
+	 *
+	 * @param currentSegment index of the segment in the current frame
+	 * @return array containing only the segment's center point (marker)
+	 */
+	@Override
 	Point[] innerPoints(int currentSegment) {
 		Point [] ptsList = new Point[1];
 		ptsList[0] = segments.get(currentSegment).getCenterPoint();
@@ -71,14 +82,29 @@ public class OneWayContraction_GradientDecent extends ExternalSegmentation {
 	}
 
 	
-	@Override //No boundary formed in this method, use centerpoint
+	/**
+	 * Returns the inner reference points unchanged.
+	 *
+	 * @param innerPts the initial inner points
+	 * @param outerPts the outer constraint points
+	 * @return the inner points unchanged
+	 */
+	@Override
 	Point[] innerBounds(Point[] innerPts, Point[] outerPts) {
 		return innerPts;
 	}
 	
 	
 	double radd;
-	@Override //Calculates the pointlist for the boundary
+	//Calculates the pointlist for the boundary
+	/**
+	 * Connects outer boundary points with straightened perimeter.
+	 *
+	 * @param innerBounds the inner reference points
+	 * @param outerPts the outer constraint points
+	 * @return array of points forming the outer boundary
+	 */
+	@Override
 	Point[] outerBounds(Point[] innerBounds, Point[] outerPts) {
 		
 		//Get Points 
@@ -149,7 +175,15 @@ public class OneWayContraction_GradientDecent extends ExternalSegmentation {
 	}
 	
 	
-	@Override //Link each point to the center
+	//Link each point to the center
+	/**
+	 * Matches each outer boundary point to the single inner marker.
+	 *
+	 * @param innerBounds the inner reference points
+	 * @param outerBounds the outer boundary points
+	 * @return array of PointSet pairs, each pairing the center with an outer point
+	 */
+	@Override
 	PointSet[] boundaryMatch(Point[] innerBounds, Point[] outerBounds) {
 		
 		
@@ -167,7 +201,13 @@ public class OneWayContraction_GradientDecent extends ExternalSegmentation {
 
 	
 	
-	@Override //gets the thresholded point of the line
+	/**
+	 * Finds the threshold point along a Bresenham line.
+	 *
+	 * @param pts array of points along the Bresenham line
+	 * @return the restriction point (transition from dark to bright)
+	 */
+	@Override
 	Point getThreasholdPoint(Point[] pts) {
 		
 		
@@ -184,51 +224,17 @@ public class OneWayContraction_GradientDecent extends ExternalSegmentation {
 	
 		
 	
-		//finds lowest intensity pixel farthest from the centerpoint
+		// Finds lowest intensity pixel farthest from the centerpoint (scan backward).
+		// get() skips bounds checking — surface trace points are always within bounds.
 		for (int i = pts.length-1; i > -1; i --) {
-			if (processor.getPixel(pts[i].x, pts[i].y) < lowestIntensity) {
-				lowestIntensity = processor.getPixel(pts[i].x, pts[i].y);
+			int px = processor.get(pts[i].x, pts[i].y);
+			if (px < lowestIntensity) {
+				lowestIntensity = px;
 				darkestPt = pts[i];
 			}
 		}
 		
 		
-		
-		
-		//OTHER OPTION: finds lowest intensity pixel closest to the centerpoint
-		/*
-		for (int i = 0; i < pts.length; i ++) {
-			if (processor.getPixel(pts[i].x, pts[i].y) < lowestIntensity) {
-				lowestIntensity = processor.getPixel(pts[i].x, pts[i].y);
-				darkestPt = pts[i];
-				System.out.println("Point count is: " + i + "/" +( pts.length -1));
-			}
-		}
-		*/
-		
-		
-		
-		
-		
-		//OTHER OPTION: Generates darkest point using a threasholding method. 
-		/*
-		//generates histogram for image
-		int [] histogram = new int[256]; 
-		for (int i = pts.length-1; i > -1; i --) {
-			histogram[processor.getPixel(pts[i].x, pts[i].y)]++;
-		}
-		
-		//finds lowest using threashold
-		AutoThresholder thresh = new AutoThresholder();
-		int trs = thresh.getThreshold(Method.Triangle, histogram); 
-		
-		for (int i = 0; i < pts.length; i ++) {
-			if (processor.getPixel(pts[i].x, pts[i].y) < trs) {
-				darkestPt = pts[i];
-				break;
-			}
-		}
-		*/
 		
 		return darkestPt;
 	}
@@ -237,41 +243,27 @@ public class OneWayContraction_GradientDecent extends ExternalSegmentation {
 	
 	
 	
-	@Override //Accessory Method: finds closest, lowest intensity point along line
+	/**
+	 * Applies restriction point detection using gradient descent surface tracing.
+	 * For each matched pair, traces along the surface toward the outer point,
+	 * selecting pixels with high intensity that move toward the goal while not exceeding radial distance.
+	 *
+	 * @param matchedPoints array of inner-outer point pairs to process
+	 * @return array of restriction points (one per matched pair)
+	 */
+	@Override
 	protected Point[] contractor (PointSet[] matchedPoints) {
 		
-		ImageProcessor copyProcessor = processor.duplicate();
-		
-		//convert to pointList
 		LinkedList<Point> ptsLinkedList = new LinkedList<>();
-		Point[] line;
-		for (int n = 0; n < matchedPoints.length; n ++) {
-			
-			
-			//TESTING
-			if (n % 10 == 0) {
-				line = surfaceTrace(matchedPoints[n].innerPoint, matchedPoints[n].outerPoint);
-				for (Point pt : line) {
-					copyProcessor.set(pt.x, pt.y, 255);
-				}
-			}
-			
-			
-			else {
-				line = surfaceTrace(matchedPoints[n].innerPoint, matchedPoints[n].outerPoint);
-			}
-			ptsLinkedList.add(getThreasholdPoint(line));	
+		for (int n = 0; n < matchedPoints.length; n++) {
+			Point[] line = surfaceTrace(matchedPoints[n].innerPoint, matchedPoints[n].outerPoint);
+			ptsLinkedList.add(getThreasholdPoint(line));
 		}
-		
-		//convert to pointList
+
 		Point[] ptsList = new Point[ptsLinkedList.size()];
 		for (int i = 0; i < ptsLinkedList.size(); i++) {
 			ptsList[i] = ptsLinkedList.get(i);
 		}
-		
-		//TESTING
-		//ImagePlus image = new ImagePlus("Test", copyProcessor);
-		//image.show();
 		
 		return ptsList;
 	}
@@ -284,6 +276,16 @@ public class OneWayContraction_GradientDecent extends ExternalSegmentation {
 
 	
 	Point startPoint;
+
+	/**
+	 * Traces a path from start to end point by iteratively moving to the neighboring pixel
+	 * that has the highest intensity while moving closer to the goal. Implements a greedy
+	 * gradient ascent algorithm for finding high-intensity pixels along the cell boundary.
+	 *
+	 * @param startPoint the beginning point (cell center)
+	 * @param endPoint the goal point (outer constraint)
+	 * @return array of points forming the traced path
+	 */
 	protected Point[] surfaceTrace(Point startPoint, Point endPoint) {
 		
 		
@@ -317,7 +319,17 @@ public class OneWayContraction_GradientDecent extends ExternalSegmentation {
 
 	
 	boolean prevDir = false;
-	//highest exterior
+	// UNCLEAR: prevDir is declared but never used in this method - may be dead code
+
+	/**
+	 * Finds the next neighboring pixel that maximizes intensity while moving closer to the goal.
+	 * Considers 8-connected neighbors and selects based on highest intensity, with tie-breaking
+	 * by preferring pixels farther from the start point (to avoid backtracking).
+	 *
+	 * @param currentPoint the current position on the surface
+	 * @param endPoint the target/goal point to move toward
+	 * @return the next pixel to move to
+	 */
 	private Point search(Point currentPoint, Point endPoint) {
 		
 		double maxIntensity = -1;
@@ -347,7 +359,7 @@ public class OneWayContraction_GradientDecent extends ExternalSegmentation {
 				}
 			}
 			if (distance == currentDistance) {
-				System.out.println("Same distance found: " + distance);
+				//System.out.println("Same distance found: " + distance);
 				int intensity = processor.get(pt.x, pt.y);
 				int currIntensity = processor.get(currentPoint.x,currentPoint.y);
 				double distanceStartPt = pyth(currentPoint, startPoint);
@@ -368,6 +380,12 @@ public class OneWayContraction_GradientDecent extends ExternalSegmentation {
 	}
 	
 	
+	/**
+	 * Checks if a point is within the valid image bounds.
+	 *
+	 * @param pt the point to check
+	 * @return true if the point is within image dimensions, false otherwise
+	 */
 	private boolean inBorder (Point pt) {
 		if (pt.x > processor.getWidth() - 1) return false;
 		if (pt.x < 0) return false;
@@ -377,8 +395,15 @@ public class OneWayContraction_GradientDecent extends ExternalSegmentation {
 	}
 	
 
-	// check pixel in a given direction from vertex (x,y)
-    private static Point getNeighbors(Point pt, int direction) {
+	/**
+	 * Returns a neighboring pixel in one of eight directions (8-connected neighborhood).
+	 * Direction wraps around after 8 to support circular iteration.
+	 *
+	 * @param pt the center point
+	 * @param direction 0-7 specifying the compass direction (0=down, 1=up, 2=down-right, etc.)
+	 * @return the neighbor point in the specified direction
+	 */
+	private static Point getNeighbors(Point pt, int direction) {
     	direction = direction % 8;
     	int x = pt.x;
     	int y = pt.y;
@@ -397,7 +422,13 @@ public class OneWayContraction_GradientDecent extends ExternalSegmentation {
 	
 	
 
-	//Euclidian distance between two points
+	/**
+	 * Calculates the Euclidean distance between two points.
+	 *
+	 * @param pt1 the first point
+	 * @param pt2 the second point
+	 * @return the straight-line distance between the two points
+	 */
 	private static double pyth(Point pt1, Point pt2) {
 		return Math.sqrt(
 				Math.pow(pt1.x - pt2.x, 2) +

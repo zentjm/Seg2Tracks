@@ -13,6 +13,11 @@ import java.awt.*;
 import java.awt.image.*;
 import java.awt.event.*;
 
+/**
+ * Custom ImageJ StackWindow for manual segmentation. Extends ImageJ's StackWindow to allow
+ * dynamic control over user input (mouse wheel, slice/channel/time selectors) during interactive segmentation.
+ * Provides userInput() method to enable/disable UI controls depending on workflow phase.
+ */
 public class ModifiedStackWindow extends StackWindow {
 
 	AdjustmentListener cAdjust;
@@ -29,6 +34,11 @@ public class ModifiedStackWindow extends StackWindow {
 	
 	
 	
+	/** Returns the z-stack scrollbar so it can be embedded in another container. */
+	public ij.gui.ScrollbarWithLabel getZSelector() {
+		return (ij.gui.ScrollbarWithLabel) zSelector;
+	}
+
 	public void userInput (boolean b) {
 		
 		if (!b) {

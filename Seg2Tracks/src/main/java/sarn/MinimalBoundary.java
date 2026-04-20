@@ -1,4 +1,4 @@
-package externalSegmentation;
+package sarn;
 
 import java.awt.Point;
 import java.awt.geom.Line2D;
@@ -7,35 +7,55 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 
-
-
-import externalSegmentation.ExternalSegmentation.PointSet;
 import geometricTools.PolarPoint;
 import ij.gui.PolygonRoi;
 import ij.gui.Roi;
+import sarn.Sarn.PointSet;
 import geometricTools.GeometricCalculations;
 
-public class MinimalBoundary_Modified extends ExternalSegmentation {
+/**
+ * Minimal Boundary SARN method implementation.
+ */
+public class MinimalBoundary extends Sarn {
 
-	public MinimalBoundary_Modified() {
-		this.name = "Minimal Boundry Modified";
+	/**
+	 * Initializes the Minimal Boundary method with default parameters.
+	 */
+	public MinimalBoundary() {
+		this.name = "Minimal Boundary";
 		this.description = " "; //TODO
 	}
 
-	@Override //Just the center point
+	/**
+	 * Returns the marker point for the current segment as the sole inner reference point.
+	 *
+	 * @param currentSegment index of the segment in the current frame
+	 * @return array containing only the segment's center point (marker)
+	 */
+	@Override
 	Point[] innerPoints(int currentSegment) {
 		Point [] ptsList = new Point[1];
 		ptsList[0] = segments.get(currentSegment).getCenterPoint();
 		return ptsList;
 	}
 
-	@Override // Points defined by minimal convex boundary 
+	/**
+	 * Computes a minimal convex boundary enclosing all neighboring cell centers and image edges.
+	 * Uses a spiral-search algorithm: (1) sorts points by radial distance, (2) initializes a triangle
+	 * from the three closest points, (3) iteratively adds the closest point between each pair
+	 * whose bending angle is less than 90 degrees, forming a convex hull.
+	 *
+	 * @param innerPoints the segment's center point
+	 * @return array of points forming the minimal convex boundary
+	 */
+	@Override
 	Point[] outerPoints(Point[] innerPoints) {
 		
 		Point centerPoint = innerPoints[0];
 		
 		//Holds polar point array
 		ArrayList<PolarPoint> pts = new ArrayList<PolarPoint>();
+		
 		
 		/**
 		 * 1. Create point list using all other segments and include edge points
@@ -47,6 +67,7 @@ public class MinimalBoundary_Modified extends ExternalSegmentation {
 		pts.add(new PolarPoint((new Point(0, centerPoint.y)), centerPoint));
 		pts.add(new PolarPoint((new Point(processor.getWidth() - 1, centerPoint.y)), centerPoint));
 		
+
 		//Adds remaining points
 		for (int i = 0; i < segments.size(); i++) {
 			 if (segments.get(i).getCenterPoint().equals(centerPoint)) {
@@ -55,6 +76,7 @@ public class MinimalBoundary_Modified extends ExternalSegmentation {
 			 pts.add(new PolarPoint(segments.get(i).getCenterPoint(), centerPoint));
 		}
 		
+	
 		/**
 		 * 2. Order point list by polar coordinate spiral
 		 */
@@ -72,14 +94,6 @@ public class MinimalBoundary_Modified extends ExternalSegmentation {
 			}
 		});
 		
-		//TESTING
-		/*
-		System.out.println("Centerpoint: x = " + centerPoint.getX() + "   x = " + centerPoint.getY());
-		for (int i = 0; i < ptArray.length; i ++) {
-			System.out.println("Organized ptArray at " + i + ", r: " + ptArray[i].getR() + "   theta: " + ptArray[i].getTheta());
-		}
-		*/
-	
 		/**
 		 * 3. Find first triangle that overlays the cell //TODO: fewer than 3 points, square problem, **make WHILE loop until closed hull
 		 */
@@ -102,7 +116,6 @@ public class MinimalBoundary_Modified extends ExternalSegmentation {
 		if ((Math.abs(outerPoints.get(1).getTheta() - outerPoints.get(0).getTheta()) > Math.PI) && 
 				(Math.abs(outerPoints.get(0).getTheta() - outerPoints.get(1).getTheta()) > Math.PI)) {
 			outerPoints.add(outerPoints.remove(0));
-			
 		}
 		
 		//System.out.println("First Point theta: " + outerPoints.get(0).getTheta());
@@ -130,8 +143,7 @@ public class MinimalBoundary_Modified extends ExternalSegmentation {
 			}
 		}
 	
-		//private boolean searchAngle (double theta, double start, double end) {
-		
+	
 		//TESTING
 		//if (point3 != null)	System.out.println("Third point found");
 		//if (point3 == null)	System.out.println("Third point NOT found");
@@ -178,8 +190,8 @@ public class MinimalBoundary_Modified extends ExternalSegmentation {
 		boolean secondRemoved = false;
 		
 	
-		ArrayList<PolarPoint> jList;
-		
+		ArrayList<PolarPoint> jList = new ArrayList<PolarPoint>();
+
 		for (int i = 0; i < outerPoints.size(); i++) {
 				
 			//System.out.println("outerPoints.size = " + outerPoints.size());
@@ -194,25 +206,13 @@ public class MinimalBoundary_Modified extends ExternalSegmentation {
 			double theta3 = outerPoints.get(n).getTheta();
 			
 			//Search list
-			jList = new ArrayList<PolarPoint>();
-			
-			//find the smallest point within the angle
-			//tempR = Double.MAX_VALUE;
-			//int minJ = -1;
+			jList.clear();
+
+			//Collect all candidate points within the angular range between theta1 and theta3
 			for (int j = 0; j < ptArray.length; j++) {
-				if (outerPoints.contains(ptArray[j])) continue; //skip contained points
+				if (outerPoints.contains(ptArray[j])) continue; //skip already-added points
 				if (searchAngle(ptArray[j].getTheta(), theta1, theta3)) {
-					
-					//for multi-test
 					jList.add(ptArray[j]);
-					
-					/*for single test
-					if (ptArray[j].getR() < tempR) {
-						tempR = ptArray[j].getR();
-						minJ = j;
-					}
-					*/
-					
 				}
 			}
 			
@@ -256,9 +256,15 @@ public class MinimalBoundary_Modified extends ExternalSegmentation {
 				double lowerR = Math.sqrt(Math.pow(r1, 2) + Math.pow(r2,2) - (2 * r1 * r2 * Math.cos(lowerAngle)));
 				double higherR = Math.sqrt(Math.pow(r3, 2) + Math.pow(r2,2) - (2 * r3 * r2 * Math.cos(higherAngle)));
 				
-				//Determine the bend angles
-				double lowerBend = Math.acos((Math.pow(r1, 2) + Math.pow(lowerR, 2) - Math.pow(r2, 2))/(2 * r1 * lowerR));
-				double higherBend = Math.acos((Math.pow(r3, 2) + Math.pow(higherR, 2) - Math.pow(r2, 2))/(2 * r3 * higherR));
+				// Determine the bend angles.
+				// Clamp arguments to [-1, 1] to guard against floating-point rounding that
+				// would otherwise cause Math.acos() to return NaN (e.g. 1.0000000000000002).
+				double lowerArg  = Math.max(-1.0, Math.min(1.0,
+						(Math.pow(r1, 2) + Math.pow(lowerR, 2) - Math.pow(r2, 2)) / (2 * r1 * lowerR)));
+				double higherArg = Math.max(-1.0, Math.min(1.0,
+						(Math.pow(r3, 2) + Math.pow(higherR, 2) - Math.pow(r2, 2)) / (2 * r3 * higherR)));
+				double lowerBend  = Math.acos(lowerArg);
+				double higherBend = Math.acos(higherArg);
 				
 				//System.out.println("lowerBend = " + lowerBend);
 				//System.out.println("higherBend = " + higherBend);
@@ -297,8 +303,6 @@ public class MinimalBoundary_Modified extends ExternalSegmentation {
 							i = 0;
 						}
 					}
-					
-					
 				}
 				else {
 					if (g == jArray.length - 1) completed = true;
@@ -311,102 +315,83 @@ public class MinimalBoundary_Modified extends ExternalSegmentation {
 			}		
 		}
 	
-				
-				
-				
-				
-				/*test removal of third point
-				if (thirdRemoved) {
-				
-					int x[] = new int[outerPoints.size()];
-					int y[] = new int[outerPoints.size()];
-					
-					int thirdPoint = -1;
-					for (int k = 0; k < outerPoints.size(); k++) {
-						if (!outerPoints.get(k).equals(point3)) {
-							x[k] = outerPoints.get(k).getCartesian().x;
-							y[k] = outerPoints.get(k).getCartesian().y;
-							System.out.println("Found third point");
-						}
-						else {
-							thirdPoint = k;
-						}
-					}
-					
-					PolygonRoi testPoly = new PolygonRoi(x,y,x.length, Roi.POLYGON);
-					if (testPoly.contains(centerPoint.x, centerPoint.y)) {
-						outerPoints.remove(thirdPoint);
-						if (i > 0) i--;
-						thirdRemoved = true;
-						System.out.println("Third point deleted");
-					}		
-				}
-				
-				
-				
-				//test removal of second point
-				if (secondRemoved) {
-					
-		
-					int x[] = new int[outerPoints.size()];
-					int y[] = new int[outerPoints.size()];
-					
-					int secondPoint = -1;
-					for (int k = 0; k < outerPoints.size(); k++) {
-						if (!outerPoints.get(k).equals(point2)) {
-							x[k] = outerPoints.get(k).getCartesian().x;
-							y[k] = outerPoints.get(k).getCartesian().y;
-						}
-						else {
-							secondPoint = k;
-						}
-					}
-					
-					PolygonRoi testPoly = new PolygonRoi(x,y,x.length, Roi.POLYGON);
-					if (testPoly.contains(centerPoint.x, centerPoint.y)) {
-						outerPoints.remove(secondPoint);
-						if (i > 0) i--;
-						secondRemoved = true;
-						System.out.println("Second point deleted");
-					}		
-				}
-				*/
-				
-		
-		
-		
-		//Convert to Point array
-		Point[] outerPointsArray = new Point[outerPoints.size()];
-		for (int i = 0; i < outerPoints.size(); i++) {
-			outerPointsArray[i] = outerPoints.get(i).getCartesian();
-		}
-		return outerPointsArray;
-	}
 
+	//Convert to Point array
+	Point[] outerPointsArray = new Point[outerPoints.size()];
+	for (int i = 0; i < outerPoints.size(); i++) {
+		outerPointsArray[i] = outerPoints.get(i).getCartesian();
+	}
+	return outerPointsArray;
+}
+
+
+	/**
+	 * Normalizes an angle to the range [0, 2π).
+	 * Handles wrapping for angles outside the standard radian range.
+	 *
+	 * @param theta the angle in radians (may be negative or > 2π)
+	 * @return the normalized angle in [0, 2π)
+	 */
 	private double normalizeRads(double theta) {
-		if (theta > (2 * Math.PI)) return (theta % (2*Math.PI)); 
-		if (theta < (-2 * Math.PI)) theta = theta % (2*Math.PI); 
+		if (theta > (2 * Math.PI)) return (theta % (2*Math.PI));
+		if (theta < (-2 * Math.PI)) theta = theta % (2*Math.PI);
 		if (theta < 0) return (2 * Math.PI) + theta;
 		else return theta;
 	}
 
+
+	/**
+	 * Computes the signed angular distance from theta1 to theta2, accounting for wraparound at 2π.
+	 *
+	 * @param theta1 the starting angle
+	 * @param theta2 the ending angle
+	 * @return the angular distance (always non-negative)
+	 */
 	private double subtractAngles(double theta1, double theta2) {
 		if (theta2 - theta1 >= 0) return theta2 - theta1;
 		else return theta2 - theta1 + 2*Math.PI;
 	}
-	
-	private boolean searchAngle (double theta, double start, double end) {
+
+
+	/**
+	 * Returns whether theta falls within the arc from start to end (exclusive), handling 2π wraparound.
+	 *
+	 * @param theta the angle to test
+	 * @param start the start of the arc
+	 * @param end the end of the arc
+	 * @return true if theta is within the arc
+	 */
+	private boolean searchAngle(double theta, double start, double end) {
 		if (end - start >= 0) return (start < theta && theta < end);
-		if (start < theta && theta < (2* Math.PI)) return true;  //if theta is between the first and 2pi, must be true
-		if (theta < end) return true; //if theta is lower than end, must be true. 
+		if (start < theta && theta < (2 * Math.PI)) return true;
+		if (theta < end) return true;
 		return false;
 	}
-	
-	private double averageAngle (double start, double end) {
-		return Math.atan2((0.5 * (Math.sin(end) + Math.sin(start))), (0.5 * (Math.cos(end) + Math.cos(start))));
+
+	/**
+	 * Computes the average angle between two angles, using circular mean to handle wraparound.
+	 * The result is normalized to [0, 2π) so it is consistent with the [0, 2π) convention
+	 * used throughout the boundary search algorithm.
+	 *
+	 * @param start the first angle in [0, 2π)
+	 * @param end the second angle in [0, 2π)
+	 * @return the average angle in [0, 2π)
+	 */
+	private double averageAngle(double start, double end) {
+		double avg = Math.atan2((0.5 * (Math.sin(end) + Math.sin(start))), (0.5 * (Math.cos(end) + Math.cos(start))));
+		return normalizeRads(avg);
 	}
 
-	private boolean polarContains (PolarPoint removedPoint, Point centerPoint, ArrayList<PolarPoint> list) {
+	/**
+	 * Checks if removing a point from the boundary polygon would still contain the center point.
+	 * Used to validate whether candidate boundary points should be retained.
+	 *
+	 * @param removedPoint the point to hypothetically remove
+	 * @param centerPoint the cell's center (must remain inside)
+	 * @param list the current list of boundary points
+	 * @return true if the polygon without removedPoint still contains centerPoint
+	 */
+	private boolean polarContains(PolarPoint removedPoint, Point centerPoint, ArrayList<PolarPoint> list) {
 		int x[] = new int[list.size()];
 		int y[] = new int[list.size()];
 
@@ -416,24 +401,45 @@ public class MinimalBoundary_Modified extends ExternalSegmentation {
 				y[i] = list.get(i).getCartesian().y;
 			}
 		}
-		
-		PolygonRoi poly = new PolygonRoi(x,y,x.length, Roi.POLYGON);
+
+		PolygonRoi poly = new PolygonRoi(x, y, x.length, Roi.POLYGON);
 		if (poly.contains(centerPoint.x, centerPoint.y)) return true;
 		return false;
 	}
-		
-	
-	@Override //No boundary formed in this method, use centerpoint
+
+
+	/**
+	 * Returns the inner reference points unchanged.
+	 *
+	 * @param innerPts the initial inner points
+	 * @param outerPts the outer constraint points
+	 * @return the inner points unchanged
+	 */
+	@Override
 	Point[] innerBounds(Point[] innerPts, Point[] outerPts) {
 		return innerPts;
 	}
 
-	@Override //connect points
+	/**
+	 * Connects outer boundary points with straightened perimeter.
+	 *
+	 * @param innerBounds the inner reference points
+	 * @param outerPts the outer constraint points
+	 * @return array of points forming the outer boundary
+	 */
+	@Override
 	Point[] outerBounds(Point[] innerBounds, Point[] outerPts) {
 		return GeometricCalculations.straightPerimeter(outerPts);
 	}
 
-	@Override //Match each point to center
+	/**
+	 * Matches each outer boundary point to the single inner marker.
+	 *
+	 * @param innerBounds the inner reference points
+	 * @param outerBounds the outer boundary points
+	 * @return array of PointSet pairs, each pairing the center with an outer point
+	 */
+	@Override
 	PointSet[] boundaryMatch(Point[] innerBounds, Point[] outerBounds) {
 		PointSet[] pointSetArray = new PointSet[outerBounds.length];
 		for (int i = 0; i < outerBounds.length; i++) {
@@ -442,7 +448,13 @@ public class MinimalBoundary_Modified extends ExternalSegmentation {
 		return pointSetArray;
 	}
 
-	@Override //
+	/**
+	 * Finds the threshold point along a Bresenham line.
+	 *
+	 * @param pts array of points along the Bresenham line
+	 * @return the restriction point (transition from dark to bright)
+	 */
+	@Override
 	Point getThreasholdPoint(Point[] pts) {
 
 		//return pts[pts.length - 1]; //Testing
@@ -454,11 +466,12 @@ public class MinimalBoundary_Modified extends ExternalSegmentation {
 		int lowestIntensity = Integer.MAX_VALUE;
 		Point darkestPt = pts[0];
 		
-		//finds lowest intensity pixel
-		//for (int i = 0; i < pts.length; i ++) {
+		// Finds lowest intensity pixel farthest from the centerpoint (scan backward).
+		// get() skips bounds checking — Bresenham points are always within bounds.
 		for (int i = pts.length - 1; i > -1; i --) {
-			if (processor.getPixel(pts[i].x, pts[i].y) < lowestIntensity) {
-				lowestIntensity = processor.getPixel(pts[i].x, pts[i].y);
+			int px = processor.get(pts[i].x, pts[i].y);
+			if (px < lowestIntensity) {
+				lowestIntensity = px;
 				darkestPt = pts[i];
 			}
 		}

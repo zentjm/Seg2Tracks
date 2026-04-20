@@ -24,6 +24,11 @@ import ij.gui.Overlay;
 import ij.gui.Roi;
 import ij.process.FloatPolygon;
 
+/**
+ * Utility for loading pre-segmented data from ImageJ overlay annotations on image files.
+ * Reconstructs a DataSet structure from ROI overlays, grouping ROIs by name (LinkSet) and frame (FrameSet).
+ * Useful for importing segmentations from other software or manually drawn ImageJ overlays.
+ */
 public class FileLoadFromOverlay {
 	
 	JPanel panel;
@@ -113,7 +118,7 @@ public class FileLoadFromOverlay {
 			//Add to linkSet list
 			boolean addedToLinkSet = false;
 			int roiName = Integer.parseInt(roi.getName().replaceAll("\\D+","")); //Test this?
-			System.out.println("Roi Name: " + roiName); //XXX: TEST
+			//System.out.println("Roi Name: " + roiName);
 			
 			for (LinkSet linkSet : dataSet.getLinkSetList()) {
 				//dSystem.out.println("Loop LinkSet:  " + linkSet.getName());
@@ -121,7 +126,7 @@ public class FileLoadFromOverlay {
 					linkSet.add(segment);
 					segment.setLinkSet(linkSet);
 					linkSet.add(segment);
-					System.out.println("Added to LinkSet " + linkSet.getName());
+					//System.out.println("Added to LinkSet " + linkSet.getName());
 					addedToLinkSet = true;
 				}
 			}
@@ -131,7 +136,7 @@ public class FileLoadFromOverlay {
 				segment.setLinkSet(linkSet);
 				linkSet.setName(roiName);
 				//dataSet.getLinkSetList().add(linkSet);
-				System.out.println("New LinkSet named: " + linkSet.getName());
+				//System.out.println("New LinkSet named: " + linkSet.getName());
 			}
 	
 			//Add to frameSet list
@@ -145,7 +150,7 @@ public class FileLoadFromOverlay {
 		
 		//Modify dataset
 		dataSet.setExternalSegmentationExists(true);	
-		System.out.println("LinkSet size is: " + dataSet.getLinkSetList().size());
+		//System.out.println("LinkSet size is: " + dataSet.getLinkSetList().size());
 	}
 	
 	

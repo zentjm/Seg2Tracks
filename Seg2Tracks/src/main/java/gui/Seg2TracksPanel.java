@@ -23,10 +23,12 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FilenameFilter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
+import java.util.Properties;
 import java.util.ArrayList;
 import java.util.Observable;
 import java.util.Observer;
@@ -42,10 +44,31 @@ import javax.swing.JTextField;
 
 import ij.process.AutoThresholder.Method;
 
+/**
+ * Main plugin window view for Seg2Tracks. Top-level Swing container that displays the HeadPanel,
+ * multiple OperationPanels or AnalysisPanels (depending on mode), and FloorPanel. Handles view
+ * transitions between segmentation and analysis modes. Manages window lifecycle and exit dialogs.
+ */
 public class Seg2TracksPanel extends JFrame implements ItemListener, Observer {
 	
-	//version number
-	static String version = "v0.4.1";
+	// Version is injected from pom.xml via Maven resource filtering into version.properties.
+	// To release a new version, update <version> in pom.xml only.
+	static String version = loadVersion();
+
+	private static String loadVersion() {
+		try (InputStream is = Seg2TracksPanel.class.getResourceAsStream("/version.properties")) {
+			if (is != null) {
+				Properties props = new Properties();
+				props.load(is);
+				String v = props.getProperty("version", "");
+				// Guard against unfiltered token (Eclipse dev mode without mvn process-resources)
+				if (!v.isEmpty() && !v.startsWith("$")) return "v" + v;
+			}
+		} catch (IOException e) {
+			// fall through to default
+		}
+		return "v0.4.13"; // fallback: keep in sync with pom.xml during dev
+	}
 	
 	//MVC connections
 	Seg2TracksController controller;
@@ -253,7 +276,6 @@ public class Seg2TracksPanel extends JFrame implements ItemListener, Observer {
 	@Override
 	public void update(Observable o, Object arg) {
 		// TODO Auto-generated method stub
-		
 	}
 
 	@Override

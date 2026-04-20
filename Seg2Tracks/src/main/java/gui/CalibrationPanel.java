@@ -14,12 +14,18 @@ import java.util.Observer;
 
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
+/**
+ * Dialog window for configuring object identification (detection) parameters.
+ * Allows users to set Gaussian blur sigma and maximum-finder tolerance thresholds,
+ * and provides access to a guided calibration wizard for automated parameter tuning.
+ */
 public class CalibrationPanel extends JFrame implements ActionListener{
 	OperationController controller;
 	OperationModel model;
@@ -29,6 +35,8 @@ public class CalibrationPanel extends JFrame implements ActionListener{
 	
 	JButton guidedCalibrationButton = new JButton("Guided Calibration");
 	JButton buttonApply = new JButton("Apply");
+
+	JCheckBox checkBoxInvertIntensity = new JCheckBox("Invert Intensity");
 	
 	JLabel calibrationMessage = new JLabel(" "); //TODO: italicize, create output
 	
@@ -50,6 +58,7 @@ public class CalibrationPanel extends JFrame implements ActionListener{
 	public void initialize() {
 		gaussianBlurSigma.setText("" + controller.getGaussianBlurSigma());
 		maximumFinderTolerance.setText("" + controller.getMaximumFinderTolerance());
+		checkBoxInvertIntensity.setSelected(controller.getInvertIntensity());
 	}
 	
 	//Create View
@@ -89,31 +98,39 @@ public class CalibrationPanel extends JFrame implements ActionListener{
         constraints.gridx = 1;
         panel.add(maximumFinderTolerance, constraints);
         
-        //ROW 3
+        //ROW 2 — Invert Intensity
     	constraints.gridy = 2;
-        
+    	constraints.gridx = 0;
+    	constraints.gridwidth = 2;
+    	panel.add(checkBoxInvertIntensity, constraints);
+    	constraints.gridwidth = 1;
+
+        //ROW 3
+    	constraints.gridy = 3;
+
       	//Guided Calibration button
     	constraints.gridx = 0;
     	panel.add(guidedCalibrationButton, constraints);
     	guidedCalibrationButton.setEnabled(false); //TODO: make this work
-    	
+
     	//Apply button
     	constraints.gridx = 1;
     	panel.add(buttonApply, constraints);
-    
+
     	//ROW 4
-    	constraints.gridy = 3;
-    	
+    	constraints.gridy = 4;
+
     	//Status message
     	constraints.gridx = 0;
     	constraints.gridwidth = 3;
     	panel.add(calibrationMessage,constraints);
     	constraints.gridwidth = 1;
-    	
-    	
+
+
     	//OBSERVERS
-    	
+
     	//Add action listeners
+    	checkBoxInvertIntensity.addActionListener(this);
     	guidedCalibrationButton.addActionListener(this);
     	buttonApply.addActionListener(this);
     	
@@ -143,6 +160,7 @@ public class CalibrationPanel extends JFrame implements ActionListener{
 		try {
 			controller.setGaussianBlurSigma(Double.parseDouble(gaussianBlurSigma.getText()));
 			controller.setMaximumFinderTolerance(Double.parseDouble(maximumFinderTolerance.getText()));
+			controller.setInvertIntensity(checkBoxInvertIntensity.isSelected());
 			calibrationMessage.setForeground(Color.BLACK);
 			calibrationMessage.setText("New values applied ");
 		}
@@ -162,17 +180,18 @@ public class CalibrationPanel extends JFrame implements ActionListener{
 		
 		
 	}
-	
-	
-	
+
 	
 	//Action listener
 	@Override
 	public void actionPerformed(ActionEvent e) {
 		if (e.getSource() == buttonApply) setCalibration();
-		
+
 		if (e.getSource() == guidedCalibrationButton) runGuidedCalibration();
-		
-		
+
+		if (e.getSource() == checkBoxInvertIntensity) {
+			controller.setInvertIntensity(checkBoxInvertIntensity.isSelected());
+			calibrationMessage.setText(" "); // clear any prior status message
+		}
 	}
 }

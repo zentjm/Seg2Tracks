@@ -2,6 +2,10 @@ package gui;
 
 import java.awt.Color;
 
+/**
+ * Enumeration of predefined UI message strings and associated colors for status feedback.
+ * Used to provide consistent visual feedback to users about file selection and input validation states.
+ */
 public enum Message {
 	DEFAULT( " ", Color.BLACK),
 	TYPING ("Typing...", Color.BLACK),

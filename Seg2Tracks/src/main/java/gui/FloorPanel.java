@@ -8,16 +8,22 @@ import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
-import javax.swing.SwingWorker;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
 
-public class FloorPanel extends JPanel implements ActionListener{
+/**
+ * The bottom control panel of the main Seg2Tracks window. Displays progress bar, navigation buttons
+ * for switching between operation and analysis views, panel management buttons (add/remove), and
+ * a button for exporting final results (overlays and measurement data).
+ */
+public class FloorPanel extends JPanel implements ActionListener, ChangeListener {
 
 	GridBagConstraints constraints = new GridBagConstraints();
 	
 	Seg2TracksController controller;
 	
 	//Label
-	JLabel progressLabel = new JLabel("Operation Progress:");
+	JLabel progressLabel = new JLabel("Progress:");
 	
 	JProgressBar progressBar = new JProgressBar();
 	
@@ -28,7 +34,6 @@ public class FloorPanel extends JPanel implements ActionListener{
 	JButton buttonSegmentationMenu = new JButton ("<< SEGMENTATION");
 	JButton buttonGenerateResults = new JButton ("GENERATE RESULTS");
 
-	
 	public FloorPanel(Seg2TracksController controller) {
 		this.controller = controller;
 		initialize();
@@ -41,43 +46,10 @@ public class FloorPanel extends JPanel implements ActionListener{
 		progressBar.setStringPainted(true);
 	}
 	
-	
 	public JProgressBar getProgressBar() {
-		return progressBar;
+		return progressBar; 
 	}
 	
-	
-	public void setProgressTask(String task, int min, int max) {
-		
-		//basic properties
-		progressBar.setString(task);
-		progressBar.setMinimum(min);
-		progressBar.setMaximum(max);
-		
-		//Initiate thread
-	
-	}
-	
-	private SwingWorker setProgressThead() {
-		return new SwingWorker <Void, Void>() {
-
-			@Override
-			protected Void doInBackground() throws Exception {
-				try {
-					 //TODO: status update
-					Thread.sleep(500);
-					}
-				catch (Exception ex) {
-					System.err.println(ex);
-					}
-				return null;
-			}
-		};
-			
-	}
-	
-	
-
 	public void createView() {
 		
 		//Constraint constants
@@ -90,7 +62,7 @@ public class FloorPanel extends JPanel implements ActionListener{
         buttonGenerateResults.addActionListener(this);	
         buttonAddPanel.addActionListener(this);
         buttonRemovePanel.addActionListener(this);
-        
+        progressBar.addChangeListener(this);
         switchToOperation();
 	}
 	
@@ -101,8 +73,6 @@ public class FloorPanel extends JPanel implements ActionListener{
 	public void allowResultsButton(boolean allow) {
 		buttonGenerateResults.setEnabled(allow);
 	}
-	
-	
 	
 	public void switchToOperation() {
 		removeAll();
@@ -138,6 +108,9 @@ public class FloorPanel extends JPanel implements ActionListener{
         //Reset analysis menu button
         buttonAnalyzeMenu.setEnabled(false);
         
+        //Reset progress bar
+        progressBar.setValue(0);
+        progressBar.setString("");
 	}
 
 	public void switchToAnalysis() {
@@ -170,10 +143,14 @@ public class FloorPanel extends JPanel implements ActionListener{
         //Reset generate results menu button
         buttonGenerateResults.setEnabled(false);
         
+        //Reset progress bar
+        progressBar.setValue(0);
+        progressBar.setString("");
+        
         repaint();
         revalidate();
+        
 	}
-	
 	
 	//Allows the generate-results only if acceptable conditions.
 	
@@ -192,15 +169,13 @@ public class FloorPanel extends JPanel implements ActionListener{
 		}
 		if (e.getSource() == buttonAddPanel) controller.addOperationPanel();
 		if (e.getSource() == buttonRemovePanel) controller.removeOperationPanel();
+		
+		//get source progressbar
 	}
-		
+
+	@Override
+	public void stateChanged(ChangeEvent e) {
+	}
 	
-	
-		
-		
-		
-		
-		// TODO Auto-generated method stub
-		
 	
 }

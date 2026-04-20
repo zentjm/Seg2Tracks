@@ -5,6 +5,11 @@ import java.util.Observable;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 
+/**
+ * Top-level model for Seg2Tracks. Manages application state including the number of operation and
+ * analysis panels, and maintains lists of corresponding model objects. Uses Observable pattern to
+ * notify listeners of state changes. Handles persistence of settings via Java Preferences.
+ */
 public class Seg2TracksModel extends Observable {
 	
 	//Settings
@@ -36,13 +41,13 @@ public class Seg2TracksModel extends Observable {
 		
 	public void initialize() {
 
-		System.out.println("loading settings");
+		//System.out.println("loading settings");
 		operationModelList = new ArrayList<OperationModel>();
 		analysisModelList = new ArrayList<AnalysisModel>();
 		
 		//load the operationPanels
 		for (int i = 0; i < operationPanels; i++) {
-			operationModelList.add(new OperationModel(i));	
+			operationModelList.add(new OperationModel(i));
 		}
 		
 		for (int i = 0; i < analysisPanels; i++) {

@@ -22,6 +22,10 @@ import calculations.DataType;
 import dataStructure.DataSet;
 import util.FileLoadFromOverlay;
 
+/**
+ * Dialog window for configuring external (SARN/background) segmentation settings.
+ * Allows users to load pre-segmented data from image overlays and control edge exclusion options.
+ */
 public class ExternalSegmentationSettings extends JFrame implements ActionListener {
 
 	JTextPane buttonGeneralInfo = new JTextPane();
@@ -93,9 +97,11 @@ public class ExternalSegmentationSettings extends JFrame implements ActionListen
 			controller.setOverlayData(dataSet);
 		}
 		
+		/*
 		if (e.getSource() == checkBoxEdgeExclusion) {
 			controller.setExcludeExternalEdges(checkBoxEdgeExclusion.isSelected());
 		}
+		*/
 			
 	
 	}

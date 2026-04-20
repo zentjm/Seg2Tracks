@@ -33,6 +33,12 @@ import org.apache.commons.lang3.SystemUtils;
 
 import dataStructure.DataSet;
 
+/**
+ * Utility for managing Seg2Tracks data directory and autosave functionality.
+ * Creates and manages the platform-specific settings/data directory (Mac: ~/Library/Application Support/Seg2Tracks,
+ * Windows: %APPDATA%\Seg2Tracks, Linux: ~/Seg2Tracks). Handles DataSet serialization, deserialization,
+ * and rolling autosave with limited file retention (max 4 most recent autosaves).
+ */
 public class FileResourcesUtil implements ActionListener {
 
 	final int autosaveNumber = 4;
@@ -92,7 +98,7 @@ public class FileResourcesUtil implements ActionListener {
 			}
 			catch(Exception exc){
 				exc.printStackTrace(); // If there was an error, print the info.
-				System.out.println("Did not load file");
+				//System.out.println("Did not load file");
 			}
 		}
 		return null;

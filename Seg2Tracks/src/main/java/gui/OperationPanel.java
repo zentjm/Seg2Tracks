@@ -20,11 +20,17 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
-
+import javax.swing.SwingWorker;
 
 import util.FileSelectionPanel;
 import util.FileType;
 
+/**
+ * View component for a single segmentation operation panel. Displays UI controls for selecting
+ * input files, segmentation algorithms (external, internal, linkage), configuring parameters,
+ * running operations, and managing DataSet I/O (load/save). Supports subsegmentation mode for
+ * recursive workflows. Updates status labels to reflect operation progress and completion.
+ */
 public class OperationPanel extends JPanel implements ActionListener, Observer {
 	
 	GridBagConstraints constraints = new GridBagConstraints();
@@ -66,7 +72,7 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 	JButton buttonInput = new JButton("Input");
 
 	//Automation Labels
-	JLabel internalSegmentationLabel = new JLabel("Internal Segmentation:");
+	JLabel internalSegmentationLabel = new JLabel("Segmentation:");
 	JLabel externalSegmentationLabel = new JLabel("SARN Preprocessing:");
 	JLabel linkageMechanismLabel = new JLabel("Linkage Mechanism:");
 	
@@ -76,6 +82,10 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 	JLabel labelStatus2 = new JLabel("Status:");
 	JLabel labelInfo2 = new JLabel(" ");
 	
+	//Subsegmentation options
+	boolean subsegmentOption = false;
+	boolean subsegmentationLocked = false; // true while a completed run is committed
+	
 	//status messages
 	JLabel inputMessage = new JLabel(" "); //TODO: italicize, create output
 
@@ -83,9 +93,11 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 	JComboBox <String[]> comboBoxInternalSegment;
 	JComboBox <String[]> comboBoxExternalSegment;
 	JComboBox <String[]> comboBoxLinkage;
+	JComboBox<String> comboBoxSubsegmentation;
 	
 	//Create CheckBox Components
 	JCheckBox checkBoxExternalDependence = new JCheckBox("External Dependence"); //XXX: Only currently necessary for manual external analysis. 
+	JCheckBox checkBoxSubsegmentation;  //XXX: Determines if this anaylsis is a recursive model
 	
 	//Create Text Field Components
 	JTextField textFieldInput = new JTextField("", 25);
@@ -108,13 +120,16 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 		this.panelNumber = panelNumber;
 		this.controller = controller;
 		this.model = model;
+		//if (panelNumber > 0) subsegmentOption = true;
+		subsegmentOption = controller.getSubsegmentation();
 		initialize();
 		setLayout(new GridBagLayout());	
 		createPanel();
 	}
 	
 	public void initialize() {
-        //Load linkage and segmentation methods:
+       
+		//Load linkage and segmentation methods:
         comboBoxLinkage = new JComboBox(controller.getLinkageMethodNames());
     	comboBoxInternalSegment = new JComboBox(controller.getInternalSegmentationMethodNames());
     	comboBoxExternalSegment = new JComboBox(controller.getExternalSegmentationMethodNames());
@@ -123,7 +138,6 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
     	comboBoxLinkage.setSelectedIndex(controller.getLinkageSelection());
     	comboBoxInternalSegment.setSelectedIndex(controller.getInternalSegmentationSelection());
     	comboBoxExternalSegment.setSelectedIndex(controller.getExternalSegmentationSelection());
-    	
     	
     	//load previous dataSet names
     	dataSetName.setText(controller.getDataSetName());
@@ -134,6 +148,20 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
     	textFieldInput = inputSelection.getField();
     	inputSelection.addObserver(this);
     	inputSelection.forceTimerUpdate(); //Ensures initial input text attempts to load a file
+    	
+    	// Subsegmentation option — always present on non-first panels.
+    	// Greyed out until at least one dataset exists; combobox only enabled when checkbox is ticked.
+    	if (panelNumber > 0) {
+    		String[] dataSetNames = controller.getDataSetNames();
+    		boolean hasDatasets = (dataSetNames != null && dataSetNames.length > 0);
+    		checkBoxSubsegmentation = new JCheckBox("Subsegmentation", false);
+    		checkBoxSubsegmentation.setEnabled(hasDatasets);
+    		comboBoxSubsegmentation = new JComboBox<String>(); // always create; populated below if data exists
+    		if (hasDatasets) {
+    			for (String name : dataSetNames) comboBoxSubsegmentation.addItem(name);
+    		}
+    		comboBoxSubsegmentation.setEnabled(false); // only enabled when checkbox is ticked
+    	}
     	
     	//Load file-loaded settings
     	updateSegmentationLoaded(0, 0);
@@ -162,7 +190,15 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
         //Panel Name
         constraints.gridx = 1;
         add(dataSetName, constraints);
-  
+                 
+  	  //Subsegmentation options — always present on non-first panels (greyed out until datasets exist)
+        if (panelNumber > 0) {
+        	constraints.gridx = 2;
+        	add(checkBoxSubsegmentation, constraints);
+        	constraints.gridx = 3;
+        	add(comboBoxSubsegmentation, constraints);
+        }
+        
     	//ROW 1
         constraints.gridy = 1;
 		
@@ -219,7 +255,7 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 		//Internal Segmentation Label
 		constraints.gridx = 0;
 	    constraints.gridwidth = 2;
-	    add(new JLabel("Internal Segmentation:"), constraints);
+	    add(new JLabel("Segmentation:"), constraints);
 	    constraints.gridwidth = 1;
 		
 		//Internal Segmentation ComboBox
@@ -240,7 +276,7 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 		//Internal Segmentation Manual Modify Button
 		constraints.gridx = 7;
 		add(buttonModifyInternal, constraints);
-		buttonModifyInternal.setEnabled(true); //TODO: This is to prevent use as the function doesn't currently work. Fix!
+		buttonModifyInternal.setEnabled(false);
 		
 		//Internal Segmentation Status 
 		constraints.gridx = 8;
@@ -295,6 +331,12 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
     	comboBoxInternalSegment.addActionListener(this);
     	comboBoxExternalSegment.addActionListener(this);
 		comboBoxLinkage.addActionListener(this);
+
+		//Subsegmentation listeners (only if widgets exist)
+		if (checkBoxSubsegmentation != null) {
+			checkBoxSubsegmentation.addActionListener(this);
+			comboBoxSubsegmentation.addActionListener(this);
+		}
 	}
 	
 	@Override
@@ -322,7 +364,6 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 		
 		if (e.getSource() == buttonRunExternal) {
 			controller.runExternalSegmentation();
-			//if (internalButtonRunReady) buttonRunInternal.setEnabled(controller.externalSegmentationExists());
 		}
 		
 		if (e.getSource() == buttonModifyInternal) {
@@ -350,27 +391,29 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 			controller.setComboBoxInternalSegmentation(comboBoxInternalSegment.getSelectedIndex());
 			
 			if (controller.isExternallyDependent()) {
-				if (!internalButtonRunReady) buttonRunInternal.setEnabled(true);
-				else buttonRunInternal.setEnabled(controller.externalSegmentationExists());
-			}
-			
-			/*
-			if (controller.isExternallyDependent()) {
 				buttonRunInternal.setEnabled(controller.externalSegmentationExists());
 			}
 			else {
 				buttonRunInternal.setEnabled(true);
 			}
-			*/
-			
-			
 		}
 		
 		if (e.getSource() == comboBoxExternalSegment) {
 			controller.setComboBoxExternalSegmentation(comboBoxExternalSegment.getSelectedIndex());
 		}
+
+		// Subsegmentation checkbox: enable/disable the dataset selection combobox
+		if (checkBoxSubsegmentation != null && e.getSource() == checkBoxSubsegmentation) {
+			boolean checked = checkBoxSubsegmentation.isSelected();
+			comboBoxSubsegmentation.setEnabled(checked);
+			controller.setSubsegmentationEnabled(checked);
+		}
+
+		// Subsegmentation combobox: notify controller which parent dataset was selected
+		if (comboBoxSubsegmentation != null && e.getSource() == comboBoxSubsegmentation) {
+			controller.setSubsegmentationSelection(comboBoxSubsegmentation.getSelectedIndex());
+		}
 	}
-	
 
 	public boolean dialogAlert(String alert) {
 		 int choice =  JOptionPane.showConfirmDialog((Component) null, alert, "alert", JOptionPane.OK_CANCEL_OPTION);
@@ -390,7 +433,7 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 	//TODO: lock analysis until something is loaded
 	//TODO: Enums for labels (0: externalSegmentation, 1: internalSegmentation)
 	//TODO: Enums for commands (0: no file loaded, 1: run file loaded, 2: save file loaded)
-	public void updateSegmentationLoaded(int label, int setting) { 
+	public void updateSegmentationLoaded(int label, int setting) {
 		
 		//Internal segmentation
 		if (label == 1) {
@@ -398,23 +441,37 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 				buttonSave.setEnabled(false); //TODO: should be able to save if only one of the segmentations is cleared
 				labelInfo1.setText(" ");
 				buttonRunInternal.setText("Run");
+				buttonModifyInternal.setEnabled(false);
 				internalButtonRunReady =  true;
 			}
 			if (setting == 1) {
+				buttonSave.setEnabled(true);
 				labelInfo1.setText("Run Data Loaded");
 				buttonRunInternal.setText("Clear");
+				buttonModifyInternal.setEnabled(true);
 				internalButtonRunReady =  false;
 			}
 			if (setting == 2) {
+				buttonSave.setEnabled(true);
 				labelInfo1.setText("Save Data Loaded");
 				buttonRunInternal.setText("Clear");
+				buttonModifyInternal.setEnabled(true);
 				internalButtonRunReady =  false;
 			}
 			if (setting == 3) {
+				buttonSave.setEnabled(true);
 				labelInfo1.setText("Modified File Loaded");
 				buttonRunInternal.setText("Clear");
+				buttonModifyInternal.setEnabled(true);
 				internalButtonRunReady =  false;
 			}
+
+			//TODO: make a cancel button work
+			if (setting == 4) {
+				buttonRunInternal.setText("Cancel");
+				buttonModifyInternal.setEnabled(false);
+			}
+
 		}
 		
 		
@@ -427,20 +484,29 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 				externalButtonRunReady =  true;
 			}
 			if (setting == 1) {
+				buttonSave.setEnabled(true);
 				labelInfo2.setText("Run Data Loaded");
 				buttonRunExternal.setText("Clear");
 				externalButtonRunReady =  false;
 			}
 			if (setting == 2) {
+				buttonSave.setEnabled(true);
 				labelInfo2.setText("Save Data Loaded");
 				buttonRunExternal.setText("Clear");
 				externalButtonRunReady =  false;
 			}
 			if (setting == 3) {
+				buttonSave.setEnabled(true);
 				labelInfo2.setText("Modified File Loaded");
 				buttonRunExternal.setText("Clear");
 				externalButtonRunReady =  false;
 			}
+			
+			//TODO: make a cance button work
+			if (setting == 4) {
+				buttonRunExternal.setText("Cancel");
+			}
+			
 		}
 		
 		if (controller.isExternallyDependent()) {
@@ -452,6 +518,46 @@ public class OperationPanel extends JPanel implements ActionListener, Observer {
 	
 	public String getDataSetName() {
 		return dataSetName.getText();
+	}
+
+	/**
+	 * Locks or unlocks the subsegmentation checkbox and combobox.
+	 * Called after a successful run (locked=true) or after all data is cleared (locked=false).
+	 * When unlocking, the checkbox is only re-enabled if datasets are available.
+	 */
+	public void setSubsegmentationLocked(boolean locked) {
+		if (panelNumber == 0 || checkBoxSubsegmentation == null) return;
+		subsegmentationLocked = locked;
+		if (locked) {
+			checkBoxSubsegmentation.setEnabled(false);
+			comboBoxSubsegmentation.setEnabled(false);
+		} else {
+			String[] names = controller.getDataSetNames();
+			boolean hasDatasets = (names != null && names.length > 0);
+			checkBoxSubsegmentation.setEnabled(hasDatasets);
+			comboBoxSubsegmentation.setEnabled(hasDatasets && checkBoxSubsegmentation.isSelected());
+		}
+	}
+
+	/**
+	 * Refreshes the subsegmentation checkbox and combobox when the pool of available
+	 * datasets changes (e.g. another panel completes a run or clears its data).
+	 * No-op on the first panel and while a run result is locked in.
+	 */
+	public void refreshSubsegmentation(String[] dataSetNames, boolean anyHasInternalSeg) {
+		if (panelNumber == 0 || checkBoxSubsegmentation == null || subsegmentationLocked) return;
+		comboBoxSubsegmentation.removeAllItems();
+		if (dataSetNames != null) {
+			for (String name : dataSetNames) comboBoxSubsegmentation.addItem(name);
+		}
+		// Only enable if at least one parent dataset has completed internal segmentation
+		checkBoxSubsegmentation.setEnabled(anyHasInternalSeg);
+		if (!anyHasInternalSeg) {
+			checkBoxSubsegmentation.setSelected(false);
+			comboBoxSubsegmentation.setEnabled(false);
+		} else {
+			comboBoxSubsegmentation.setEnabled(checkBoxSubsegmentation.isSelected());
+		}
 	}
 	
 	public void updateInputFile() {

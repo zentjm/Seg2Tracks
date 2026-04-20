@@ -1,4 +1,4 @@
-package externalSegmentation;
+package sarn;
 
 import java.awt.Point;
 import java.util.ArrayList;
@@ -7,21 +7,34 @@ import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.Stack;
 
-import externalSegmentation.ExternalSegmentation.PointSet;
 import geometricTools.GeometricCalculations;
 import ij.ImagePlus;
 import ij.process.AutoThresholder;
 import ij.process.AutoThresholder.Method;
+import sarn.Sarn.PointSet;
 import ij.process.ImageProcessor;
 
-public class OneWayContraction_Exclusion extends ExternalSegmentation {
+/**
+ * One-Way Contraction with Exclusion SARN method implementation.
+ */
+public class OneWayContraction_Exclusion extends Sarn {
 
+	/**
+	 * Initializes the One-Way Contraction with Exclusion method with default parameters.
+	 */
 	public OneWayContraction_Exclusion() {
 		this.name = "One-Way Contraction_Exclusion";
 		this.description = " "; //TODO
 	}
 
-	@Override //Collects the internal points that should be used
+	//Collects the internal points that should be used
+	/**
+	 * Returns the marker point for the current segment as the sole inner reference point.
+	 *
+	 * @param currentSegment index of the segment in the current frame
+	 * @return array containing only the segment's center point (marker)
+	 */
+	@Override
 	Point[] innerPoints(int currentSegment) {
 		Point [] ptsList = new Point[1];
 		ptsList[0] = segments.get(currentSegment).getCenterPoint();
@@ -74,14 +87,29 @@ public class OneWayContraction_Exclusion extends ExternalSegmentation {
 	}
 
 	
-	@Override //No boundary formed in this method, use centerpoint
+	/**
+	 * Returns the inner reference points unchanged.
+	 *
+	 * @param innerPts the initial inner points
+	 * @param outerPts the outer constraint points
+	 * @return the inner points unchanged
+	 */
+	@Override
 	Point[] innerBounds(Point[] innerPts, Point[] outerPts) {
 		return innerPts;
 	}
 	
 	
 	double radd;
-	@Override //Calculates the pointlist for the boundary
+	//Calculates the pointlist for the boundary
+	/**
+	 * Connects outer boundary points with straightened perimeter.
+	 *
+	 * @param innerBounds the inner reference points
+	 * @param outerPts the outer constraint points
+	 * @return array of points forming the outer boundary
+	 */
+	@Override
 	Point[] outerBounds(Point[] innerBounds, Point[] outerPts) {
 		
 		//Get Points 
@@ -150,7 +178,14 @@ public class OneWayContraction_Exclusion extends ExternalSegmentation {
 	}
 	
 	
-	@Override //Link each point to the center
+	/**
+	 * Matches each outer boundary point to the single inner marker.
+	 *
+	 * @param innerBounds the inner reference points
+	 * @param outerBounds the outer boundary points
+	 * @return array of PointSet pairs, each pairing the center with an outer point
+	 */
+	@Override
 	PointSet[] boundaryMatch(Point[] innerBounds, Point[] outerBounds) {
 		PointSet[] pointSetArray = new PointSet[outerBounds.length];
 		for (int i = 0; i < outerBounds.length; i++) {
@@ -160,30 +195,48 @@ public class OneWayContraction_Exclusion extends ExternalSegmentation {
 	}
 
 	
-	@Override //gets the thresholded point of the line
+	/**
+	 * Finds the threshold point along a Bresenham line.
+	 *
+	 * @param pts array of points along the Bresenham line
+	 * @return the restriction point (transition from dark to bright)
+	 */
+	@Override
 	Point getThreasholdPoint(Point[] pts) {
 		int lowestIntensity = Integer.MAX_VALUE;
 		Point darkestPt = pts[pts.length-1];
-		//finds lowest intensity pixel FARTHEST from the centerpoint
+		// Finds lowest intensity pixel farthest from the centerpoint (scan backward).
+		// get() skips bounds checking — Bresenham points are always within bounds.
+		// Pixel value is cached to avoid reading the same pixel twice per iteration.
 		for (int i = pts.length-1; i > -1; i --) {
-			if (processor.getPixel(pts[i].x, pts[i].y) < lowestIntensity) {
-				lowestIntensity = processor.getPixel(pts[i].x, pts[i].y);
+			int px = processor.get(pts[i].x, pts[i].y);
+			if (px < lowestIntensity) {
+				lowestIntensity = px;
 				darkestPt = pts[i];
 			}
 		}
 		return darkestPt;
 	}
 	
-	
+
+
+	/**
+	 * Finds the threshold point by returning the darkest pixel closest to the center (scans forward).
+	 * Alternative to getThreasholdPoint which scans backward from the outer edge.
+	 *
+	 * @param pts array of points along the Bresenham line
+	 * @return the darkest point closest to the line's starting point (center)
+	 */
 	Point getNearestThreasholdPoint(Point[] pts) {
 		int lowestIntensity = Integer.MAX_VALUE;
 		Point darkestPt = pts[0];
-		//finds lowest intensity pixel NEAREST to the centerpoint
+		// Finds lowest intensity pixel nearest to the centerpoint (forward scan).
+		// get() skips bounds checking — Bresenham points are always within bounds.
 		for (int i = 0; i < pts.length; i ++) {
-			if (processor.getPixel(pts[i].x, pts[i].y) < lowestIntensity) {
-				lowestIntensity = processor.getPixel(pts[i].x, pts[i].y);
+			int px = processor.get(pts[i].x, pts[i].y);
+			if (px < lowestIntensity) {
+				lowestIntensity = px;
 				darkestPt = pts[i];
-				//System.out.println("Point count is: " + i + "/" +( pts.length -1));
 			}
 		}
 		return darkestPt;
@@ -191,13 +244,22 @@ public class OneWayContraction_Exclusion extends ExternalSegmentation {
 	
 	
 	Point startPoint;
-	int skipAllowance = 20; //TODO: it makes sense for this to be proportional to sigma in some way
-	
+	// TODO: skipAllowance should be proportional to the Gaussian blur sigma for adaptive thresholding
+	int skipAllowance = 20;
 
-	//////////////////////////////////////Following Cold (method#4) works well enough//////////
-	
 
-	@Override //Accessory Method: finds closest, lowest intensity point along line
+	// NOTE: Implementation method #4 ("Cold") appears to work well enough for current use cases.
+
+
+	/**
+	 * Applies restriction point detection with minimal path interpolation when gaps occur between sampled points.
+	 * If the distance between consecutive threshold points exceeds skipAllowance, computes a minimal
+	 * path through the gap to ensure boundary continuity.
+	 *
+	 * @param matchedPoints array of inner-outer point pairs to process
+	 * @return array of restriction points with interpolated path coverage
+	 */
+	@Override
 	protected Point[] contractor (PointSet[] matchedPoints) {
 		
 		ImageProcessor copyProcessor = processor.duplicate();
@@ -221,8 +283,8 @@ public class OneWayContraction_Exclusion extends ExternalSegmentation {
 			//checks if you are a significant distance from previous point
 			if (pyth(prev, curr) > skipAllowance) {
 				Point[] path = minimalPath(matchedPoints, n, prev, curr); //adds path
-				System.out.println("Finished Path");
-				System.out.println("Path needed. Length: " + path.length);
+				//System.out.println("Finished Path");
+				//System.out.println("Path needed. Length: " + path.length);
 				for (int i = 0; i < path.length; i ++) {
 					ptsLinkedList.add(path[i]);
 				}
@@ -234,8 +296,8 @@ public class OneWayContraction_Exclusion extends ExternalSegmentation {
 		//handles end points
 		if (pyth(prev, startMark) > skipAllowance) {
 			Point[] path = minimalPath(matchedPoints, 0, prev, startMark); //adds path
-			System.out.println("Finished Path");
-			System.out.println("Path needed. Length: " + path.length);
+			//System.out.println("Finished Path");
+			//System.out.println("Path needed. Length: " + path.length);
 			for (int i = 0; i < path.length; i ++) {
 				ptsLinkedList.add(path[i]);
 			}
@@ -259,8 +321,19 @@ public class OneWayContraction_Exclusion extends ExternalSegmentation {
 	
 	
 	
+	/**
+	 * Computes a minimal intensity path bridging a gap in the perimeter between two threshold points.
+	 * When consecutive sampled points are too far apart (skipAllowance exceeded), this method iterates
+	 * through adjacent Bresenham lines, finding the darkest pixels and combining them into a continuous path.
+	 *
+	 * @param matchedPoints array of all matched point pairs (context for neighbors)
+	 * @param index current index in the matched points array
+	 * @param startPoint the starting threshold point (from previous Bresenham line)
+	 * @param endPoint the target threshold point (from current Bresenham line)
+	 * @return array of points forming the minimal intensity path, or empty array if path is worse than direct line
+	 */
 	protected Point[] minimalPath(PointSet[] matchedPoints, int index, Point startPoint, Point endPoint) {
-		
+
 		boolean solved = false;
 		ArrayList<Point> nearList = new ArrayList<Point>();
 		ArrayList<Point> farList = new ArrayList<Point>();
@@ -288,7 +361,7 @@ public class OneWayContraction_Exclusion extends ExternalSegmentation {
 		}
 		
 	
-		System.out.println("Smallest index: " + smallestIndex + "   currIndex: " + currIndex + "   prevIndex: " + prevIndex);
+		//System.out.println("Smallest index: " + smallestIndex + "   currIndex: " + currIndex + "   prevIndex: " + prevIndex);
 		
 		
 		for (int j = 0; j < matchedPoints.length; j++) {
@@ -310,23 +383,22 @@ public class OneWayContraction_Exclusion extends ExternalSegmentation {
 			//XXX:adjust smallest index based on line length
 			if (line.length != prevLine.length) {
 				int stepDiff = line.length - prevLine.length;
-				System.out.println("Line: " + line.length + ", prevLine: " + prevLine.length);
-				System.out.println("Line lengths are different by: " + stepDiff + " at j = " + j);
+				//System.out.println("Line: " + line.length + ", prevLine: " + prevLine.length);
+				//System.out.println("Line lengths are different by: " + stepDiff + " at j = " + j);
 				int newSmallestIndex = smallestIndex + stepDiff;
-				System.out.println("smallIndex: " + smallestIndex + ", new smallest index: " + newSmallestIndex);
+				//System.out.println("smallIndex: " + smallestIndex + ", new smallest index: " + newSmallestIndex);
 				smallestIndex = newSmallestIndex;
 				if (smallestIndex < 1) smallestIndex = 1;
 			}
-			
-			
-			
+		
 			int maxInt = -1;
 			int maxIndex = -1;
 		
 			//from the smallest index, iterate outward, finding brightest point in that range
 			for (int i = smallestIndex; i < line.length; i ++) {
-				if (processor.getPixel(line[i].x, line[i].y) > maxInt) {
-					maxInt = processor.getPixel(line[i].x, line[i].y);
+				int px = processor.get(line[i].x, line[i].y);
+				if (px > maxInt) {
+					maxInt = px;
 					maxIndex = i;
 				}
 			}
@@ -344,7 +416,7 @@ public class OneWayContraction_Exclusion extends ExternalSegmentation {
 			//Get smallest index location on line
 			smallestIndex = thresholdIndex(line, pt1) + 1 ; //XXX: still not sure why +1 is neccessary. 
 			int smallestIndex2 = thresholdIndex(line, pt1);
-			System.out.println("Smallest index: " + smallestIndex + ", smallestIndex2: " + smallestIndex2);
+			//System.out.println("Smallest index: " + smallestIndex + ", smallestIndex2: " + smallestIndex2);
 
 			prevLine = line;
 			//test if close
@@ -380,27 +452,27 @@ public class OneWayContraction_Exclusion extends ExternalSegmentation {
 					ptsList[farList.size() -1 + i] = nearList.get(nearList.size() -1 - i);
 				}
 			}
-			System.out.println("ptsList Length: " + ptsList.length);
+			//System.out.println("ptsList Length: " + ptsList.length);
 			
 			
 	
 			
 			//FOR CHECKING IF LOOP IS BAD IS BAD -- method 1
 			Point[] brokenLine = bresenham (startPoint, endPoint);
-			System.out.println("brokenline length: " + brokenLine.length);
+			//System.out.println("brokenline length: " + brokenLine.length);
 			double avgIntBroken = 0;
 			for (int i = 0; i < brokenLine.length; i ++) {
-				avgIntBroken += processor.getPixel(brokenLine[i].x, brokenLine[i].y);
+				avgIntBroken += processor.get(brokenLine[i].x, brokenLine[i].y);
 			}
 			avgIntBroken = avgIntBroken / brokenLine.length;
-			System.out.println("Broken average: " + avgIntBroken);
+			//System.out.println("Broken average: " + avgIntBroken);
 			
 			double avgIntPtsList = 0;
 			for (int i = 0; i < ptsList.length; i ++) {
-				avgIntPtsList += processor.getPixel(ptsList[i].x, ptsList[i].y);
+				avgIntPtsList += processor.get(ptsList[i].x, ptsList[i].y);
 			}
 			avgIntPtsList = avgIntPtsList/ ptsList.length;
-			System.out.println("PtsList average: " + avgIntPtsList);
+			//System.out.println("PtsList average: " + avgIntPtsList);
 			
 		
 			if (avgIntPtsList < avgIntBroken) {
@@ -412,11 +484,18 @@ public class OneWayContraction_Exclusion extends ExternalSegmentation {
 	}
 	
 	
+	/**
+	 * Finds the index position of a specific point within a line array.
+	 * Used to determine where along a Bresenham path a particular threshold point was found.
+	 *
+	 * @param line array of points on the Bresenham line
+	 * @param pt the point to locate
+	 * @return the index of the point in the array, or 0 if not found
+	 */
 	protected int thresholdIndex(Point[] line, Point pt) {
 		for (int i = 0; i < line.length; i ++) {
-			if (line[i] == null) {
-				System.out.println("Point on line @ " + i + " is: " + line[i].x + "," + line[i].y);
-			}
+			// NOTE: if line[i] == null here a NullPointerException would occur; null check preserved for safety
+			//if (line[i] == null) { System.out.println("Point on line @ " + i + " is null"); }
 			if (pt.x == line[i].x && pt.y == line[i].y) {
 				return i;
 			}
@@ -424,7 +503,13 @@ public class OneWayContraction_Exclusion extends ExternalSegmentation {
 		return 0;
 	}
 		
-	//Euclidian distance between two points
+	/**
+	 * Calculates the Euclidean distance between two points.
+	 *
+	 * @param pt1 the first point
+	 * @param pt2 the second point
+	 * @return the straight-line distance between the two points
+	 */
 	private static double pyth(Point pt1, Point pt2) {
 		return Math.sqrt(
 				Math.pow(pt1.x - pt2.x, 2) +
@@ -432,7 +517,14 @@ public class OneWayContraction_Exclusion extends ExternalSegmentation {
 			);
 	}
 	
+	/**
+	 * Checks if a point is within the valid image bounds.
+	 *
+	 * @param pt the point to check
+	 * @return true if the point is within image dimensions, false otherwise
+	 */
 	private boolean inBorder (Point pt) {
+		// Check all four boundaries
 		if (pt.x > processor.getWidth() - 1) return false;
 		if (pt.x < 0) return false;
 		if (pt.y > processor.getHeight() - 1) return false;

@@ -29,6 +29,12 @@ import ij.plugin.frame.RoiManager;
 
 
 
+/**
+ * View window for manual segmentation controls. Displays context-specific button panels for:
+ * main menu (create/modify/end segmentation), drawing individual segments (frame progression),
+ * and modifying existing objects (delete/merge/split/link operations). Updates button enabled states
+ * based on workflow progress and data availability.
+ */
 public class ManualSegmentationPanel extends JFrame implements ActionListener {
 
 	private static final long serialVersionUID = 3344773321063920231L;
@@ -118,8 +124,6 @@ public class ManualSegmentationPanel extends JFrame implements ActionListener {
 		buttonSplitObject.setEnabled(false);
 		buttonLinkObjects.setEnabled(false);
 		buttonUnlinkObjects.setEnabled(false);
-		
-		
 				
 		//Initiate Panel
 		add(panel);
@@ -202,9 +206,8 @@ public class ManualSegmentationPanel extends JFrame implements ActionListener {
 		//Object Creation Buttons //TODO
 		if (e.getSource() == buttonStartObject) controller.startObject();
 		if (e.getSource() == buttonNextFrame) controller.nextFrame();
-		if (e.getSource() == buttonPreviousFrame) {
-			//TODO: Implement?
-		}
+		if (e.getSource() == buttonPreviousFrame) controller.previousFrame();
+		
 		if (e.getSource() == buttonRestoreSelection) controller.restoreSelection();
 		if (e.getSource() == buttonEndObject) controller.endObject();
 		

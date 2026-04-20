@@ -1,6 +1,7 @@
 package geometricTools;
 
 import java.awt.Point;
+import java.awt.geom.Line2D;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -15,9 +16,20 @@ import ij.gui.PolygonRoi;
 import ij.gui.Roi;
 import ij.process.ImageProcessor;
 
+/**
+ * GeometricCalculations provides utility methods for geometric operations on Point arrays.
+ * Includes contour smoothing, polygon operations, area calculations, and spatial queries used
+ * throughout the segmentation and tracking pipeline.
+ */
 public class GeometricCalculations {
 
-	//Detects and removes static
+	/**
+	 * Attempts to detect and remove noise/static from a point sequence.
+	 * Currently incomplete—returns null.
+	 * @param pts point array representing a contour
+	 * @return filtered point array (currently returns null)
+	 */
+	// STUB: method not fully implemented — returns null
 	public static Point[] attenuateStatic(Point[] pts) {
 		
 		int[] noise = new int[pts.length];
@@ -54,9 +66,11 @@ public class GeometricCalculations {
 		return null;
 	}
 	
-
-	
-	//Snips off excess curves
+	/**
+	 * Removes looping portions of a contour by detecting nearby point revisits.
+	 * @param pts point array representing a contour
+	 * @return simplified contour without loops
+	 */
 	public static Point[] snip (Point[] pts) {
 		
 		//arraylist and transfer
@@ -95,11 +109,16 @@ public class GeometricCalculations {
 	
 	
 	
-	//Calculates a smoothing spline
+	/**
+	 * Smooths a contour using local averaging of direction vectors.
+	 * Reduces noise while preserving overall shape.
+	 * @param pts input contour points
+	 * @return smoothed contour
+	 */
 	public static Point[] smooth (Point[] pts) {
-		
-		//Stretch = place before and after with biggest effect
-		int search = 5; //TODO: Should be adjustable
+
+		// Local averaging window (should be adjustable parameter)
+		int search = 5; // TODO: Should be adjustable
 		double [][] vectorList = new double[pts.length][2];
 		//System.out.println("Points length is: " + pts.length);
 		for (int i = 0; i < pts.length; i ++) {
@@ -137,29 +156,116 @@ public class GeometricCalculations {
 		return ptsList;	
 	}
 	
-
-	public static boolean boundryOverlap(Point[] A, Point[] B, double threashold) {
 	
+
+	/**
+	 * Checks if two contours have significant boundary overlap using line intersection.
+	 * @param A first contour points
+	 * @param B second contour points
+	 * @param threashold overlap threshold (0-1, fraction of A's area)
+	 * @return true if overlap exceeds threshold
+	 */
+	public static boolean boundryOverlap(Point[] A, Point[] B, double threashold) {
+		
+		//System.out.println("A size is is: " + A.length);
+		//System.out.println("B size is is: " + B.length);
+		
 		int count = 0;
 		if (threashold < 0) threashold = 0;
 		if (threashold > 1) threashold = 1;
 		int returnCount = 0;
-		if (threashold > 0) returnCount = (int) (threashold * getAreaByRoi(A).length);
-			
+		if (threashold > 0) returnCount = (int) (threashold * getAreaByRoi(A).length); //TODO: something like overlap index
 		
-		for (Point pt1: A) {
-			for (Point pt2: B) {
-				if (pt1.x == pt2.x && pt1.y == pt2.y) {
-					count ++;
-					if (count > returnCount) return true;
-				}
+		
+		//Implement code for colliniarity
+		for (int a = 1; a < A.length; a++) {
+			Line2D.Double lineA = new Line2D.Double(A[a-1], A[a]);
+			for (int b = 1; b < B.length; b++) {
+				Line2D.Double lineB = new Line2D.Double(B[b-1], B[b]);
+				if (lineA.intersectsLine(lineB)) count ++;
 			}
+			Line2D.Double lineB = new Line2D.Double(B[B.length - 1], B[0]);
+			if (lineA.intersectsLine(lineB)) count ++;
 		}
-		return false;
+		
+		Line2D.Double lineA = new Line2D.Double(A[A.length - 1], A[0]);
+		for (int b = 1; b < B.length; b++) {
+			Line2D.Double lineB = new Line2D.Double(B[b -1], B[b]);
+			if (lineA.intersectsLine(lineB)) count ++;
+		}
+		Line2D.Double lineB = new Line2D.Double(B[B.length - 1], B[0]);
+		if (lineA.intersectsLine(lineB)) count ++;
+		
+		//System.out.println("Count is: " + count);
+		
+		if (count > returnCount) return true;
+		else return false;
 	}
 	
 
 	
+	
+	/**
+	 * Uses ray casting algorithm to test if a point is inside a polygon.
+	 * @param pt test point
+	 * @param shape polygon vertices
+	 * @param width image width (for ray direction)
+	 * @return true if point is inside the polygon
+	 */
+	public static boolean pointInsideShape(Point pt, Point[] shape, int width) {
+		
+		int count = 0;
+		
+		
+		for (Point pt2: shape) {
+			if (pt.x == pt2.x && pt.y == pt2.y) return true;
+		}
+		
+		
+		
+		//should be an odd count if 
+		for (int x = pt.x; x < width; x++) {			
+			for (Point pt2: shape) {
+				if (x == pt2.x && pt.y == pt2.y) count++;
+			}
+		}
+		
+		if (count % 2 == 1) return true;
+		
+		return false;
+	}
+	
+	
+	
+	
+	
+		
+	/**
+	 * Tests if two line segments intersect.
+	 * @param A1 first point of line A
+	 * @param A2 second point of line A
+	 * @param B1 first point of line B
+	 * @param B2 second point of line B
+	 * @return true if line segments intersect
+	 */
+	public static boolean lineIntersection(Point A1, Point A2, Point B1, Point B2) {
+		Line2D.Double lineA = new Line2D.Double(A1, A2);
+		Line2D.Double lineB = new Line2D.Double(B1, B2);
+		if (lineA.intersectsLine(lineB)) return true;
+		return false;
+	}
+	
+	//determines the appropriate 
+	
+	
+
+	
+	/**
+	 * Calculates intensity statistics (mean, median, mode) for pixels within a region.
+	 * @param pointList boundary points defining the region
+	 * @param target source image
+	 * @return array: [integrated intensity, mean, median, mode]
+	 */
 	public static double[] getIntensity (Point[] pointList, ImagePlus target) {
 		
 		Point areaPointList[] = getAreaByRoi(pointList);
@@ -210,17 +316,13 @@ public class GeometricCalculations {
 		return results;
 	}
 	
-	
-	
-	
-	
-	
-	
-	
 		
-		
-		
-	//Gets the area of the roi by generating a new polygon roi
+	/**
+	 * Gets all pixels contained within a polygon defined by boundary points.
+	 * Uses ImageJ's PolygonRoi to fill the region.
+	 * @param pointList boundary points
+	 * @return array of all points inside the polygon
+	 */
 	public static Point[] getAreaByRoi (Point[] pointList) {
 		
 		//pointList = straightPerimeter(pointList);
@@ -229,6 +331,11 @@ public class GeometricCalculations {
 		int minY = Integer.MAX_VALUE;
 		int maxX = -1;
 		int maxY = -1;
+		
+		if (pointList == null) {
+		 System.out.println("pointList is null");
+		}
+		else  System.out.println("pointList is NOT null");
 		
 		float[] xPoints = new float[pointList.length];
 		float[] yPoints = new float[pointList.length];
@@ -252,6 +359,11 @@ public class GeometricCalculations {
 	
 		
 
+	/**
+	 * Converts a Point array into an ImageJ PolygonRoi.
+	 * @param pointList boundary points
+	 * @return PolygonRoi representing the contour
+	 */
 	public static PolygonRoi getPolygonRoi(Point[] pointList) {
 		float[] xPoints = new float[pointList.length];
 		float[] yPoints = new float[pointList.length];
@@ -263,7 +375,12 @@ public class GeometricCalculations {
 	}
 	
 
-	//Gets area from perimeter //TODO: think there are some bugs
+	/**
+	 * Fills a region bounded by perimeter points using a scanline algorithm.
+	 * TODO: Known to have bugs in complex cases
+	 * @param pts boundary points (should be a closed contour)
+	 * @return array including both perimeter and interior points
+	 */
 	public static Point[] getArea (Point[] pts) {
 		
 		//TODO - 1. Arrange the points for easy identificaiton
@@ -363,9 +480,9 @@ public class GeometricCalculations {
 			}
 		}
 		
-		System.out.println("Points Length: " + pts.length);
-		System.out.println("New Points Length: " +  newPts.size());
-		System.out.println("Center Points Added: " + count);
+		//System.out.println("Points Length: " + pts.length);
+		//System.out.println("New Points Length: " +  newPts.size());
+		//System.out.println("Center Points Added: " + count);
 		
 		
 		Point[] pts2 = new Point[newPts.size()];
@@ -377,14 +494,27 @@ public class GeometricCalculations {
 		return pts2;
 	}
 	
-	//Collect all the points across the entire line
+	/**
+	 * Collects all intermediate points along a line segment.
+	 * TODO: Not yet implemented
+	 * @param pts points on line
+	 * @param start start index
+	 * @param end end index
+	 * @return interpolated points (currently returns null)
+	 */
+	// STUB: method not yet implemented — returns null
 	public Point[] collectLine (Point [] pts, int start, int end) {
 		for (int i = 0; i < end; i ++) {			
 		}
 		return null;
 	}
 	
-	//allows skipping for neighbors
+	/**
+	 * Simplifies a contour by removing redundant points via shortcut detection.
+	 * Filters very small contours (<200 points).
+	 * @param pts input contour points
+	 * @return simplified contour
+	 */
 	public static Point[] shortcutPerimeter (Point[] pts) {
 		
 		//Check for no points
@@ -402,9 +532,18 @@ public class GeometricCalculations {
 		return  shortcutPerimeter(pts, 100, 2, 2, 4);
 	}
 	
-	//Perimeter filter
+	/**
+	 * Advanced perimeter simplification using adjustable search parameters.
+	 * Detects and removes redundant contour points using spatial proximity.
+	 * @param pts input contour points
+	 * @param searchDistance how far ahead to look for shortcuts
+	 * @param range minimum spacing before checking for shortcuts
+	 * @param smoothing pixel distance threshold for shortcut detection
+	 * @param minimumSize stop simplifying if smaller than this
+	 * @return simplified contour
+	 */
 	public static Point[] shortcutPerimeter (Point[] pts, int searchDistance, int range, int smoothing, int minimumSize) {
-		System.out.println("Running Shortcut");
+		//System.out.println("Running Shortcut");
 		
 		
 		
@@ -525,11 +664,11 @@ public class GeometricCalculations {
 		//--------
 		
 		/*
-		System.out.println("Starting SHORTCUT...");
+		//System.out.println("Starting SHORTCUT...");
 		
 	
 		if (pts.length == 0) {
-			System.out.println("This pointlist has no points");
+			//System.out.println("This pointlist has no points");
 			return pts; //deals with null arrays 
 		}
 		
@@ -552,8 +691,8 @@ public class GeometricCalculations {
 					if (j > range + i) { //not sequential
 						if (Math.abs(pt1.x - pt2.x) + Math.abs(pt1.y - pt2.y) < 2) { //physically next to each other
 							offset = j - i;
-							System.out.println("RANGE:" + range);
-							System.out.println("Shorcut between Point at i:" + i + "  j:" + j);
+							//System.out.println("RANGE:" + range);
+							//System.out.println("Shorcut between Point at i:" + i + "  j:" + j);
 							detected = true;
 						}
 					}
@@ -563,7 +702,7 @@ public class GeometricCalculations {
 			index = index + offset < pts.length - 1 ? index + offset : index + offset - pts.length + 1;
 			newPtsList.add(pts[index]);
 			index ++;
-			System.out.println("   Index: " + index + "  Offset:" + offset + "   pts.length:" + pts.length);
+			//System.out.println("   Index: " + index + "  Offset:" + offset + "   pts.length:" + pts.length);
 		}
 
 		
@@ -578,13 +717,13 @@ public class GeometricCalculations {
 		/*
 		//trim new array
 		newPts = Arrays.copyOf(newPts, index);
-		System.out.println("Old Array Length: " + pts.length);
-		System.out.println("New Array Length: " + newPts.length);
+		//System.out.println("Old Array Length: " + pts.length);
+		//System.out.println("New Array Length: " + newPts.length);
 		
 		
 		for (int i = 0; i < newPts.length; i++) {
 			if (newPts[i] == null) {
-				System.out.println("newPts null @ " + i);
+				//System.out.println("newPts null @ " + i);
 			}
 		}
 		*/
@@ -602,20 +741,30 @@ public class GeometricCalculations {
 	
 	
 	
-	//Handles self-intersection
+	/**
+	 * Removes self-intersecting loops from a contour.
+	 * Uses default search distance of 300 pixels.
+	 * @param pts contour points
+	 * @return contour with self-intersections removed
+	 */
 	public static Point[] snipPerimeter (Point[] pts) {
 		return snipPerimeter(pts, 300);
 	}
 	
 	
-	//Snips at self-intersection to eliminate cul-de-sac
+	/**
+	 * Removes contour loops and cul-de-sacs by detecting point revisits.
+	 * @param pts contour points
+	 * @param searchDistance how far back to look for matching points
+	 * @return simplified contour without loops
+	 */
 	public static Point[] snipPerimeter (Point[] pts, int searchDistance) {
 	
-		System.out.println("Starting snipping...");
+		//System.out.println("Starting snipping...");
 		
 		if (pts.length == 0) {
 			
-			System.out.println("This pointlist has no points");
+			//System.out.println("This pointlist has no points");
 			return pts; //deals with null arrays 
 		}
 		
@@ -632,7 +781,7 @@ public class GeometricCalculations {
 				if (pt1.equals(pt2)) {
 					int tempIndex = index;
 					index = index - (i - j);
-					System.out.println("Matched Point at i:" + i + "  j:" + j + "  pre-index:" + tempIndex + "   after-index:" + index);
+					//System.out.println("Matched Point at i:" + i + "  j:" + j + "  pre-index:" + tempIndex + "   after-index:" + index);
 				}
 			}
 			if (index < 1) index = 1;
@@ -643,13 +792,13 @@ public class GeometricCalculations {
 		
 		//trim new array
 		newPts = Arrays.copyOf(newPts, index);
-		System.out.println("Old Array Length: " + pts.length);
-		System.out.println("New Array Length: " + newPts.length);
+		//System.out.println("Old Array Length: " + pts.length);
+		//System.out.println("New Array Length: " + newPts.length);
 		
 		
 		for (int i = 0; i < newPts.length; i++) {
 			if (newPts[i] == null) {
-				System.out.println("newPts null @ " + i);
+				//System.out.println("newPts null @ " + i);
 			}
 		}
 		
@@ -662,7 +811,12 @@ public class GeometricCalculations {
 	
 	
 	
-	//Gets a point-to-point parimeter (no spline)
+	/**
+	 * Converts a point-to-point contour into a filled scanline representation.
+	 * Connects each point to the next using Bresenham's line algorithm.
+	 * @param pts boundary points (contour vertices)
+	 * @return dense point array connecting consecutive vertices
+	 */
 	public static Point[] straightPerimeter (Point[] pts) {
 		
 		if (pts.length == 0) return pts; //deals with points already right next to each other. 
@@ -670,14 +824,13 @@ public class GeometricCalculations {
 		ArrayList<Point> newPts = new ArrayList<>();
 		//newPts.add(pts[0]); //Adds first point
 			
-		
 		ArrayList<Point> list;
 		for (int  j = 1; j < pts.length; j ++) {
+			
 			/*
 			 * Adds everything from this bresenham algorithm to the end of the list
 			 * 
 			 * By finding all the points between each point and the next, 
-			 * 
 			 */
 			
 			//newPts.addAll(bresenham(pts[j-1].x, pts[j-1].y, pts[j].x, pts[j].y));
@@ -685,6 +838,7 @@ public class GeometricCalculations {
 			//testing
 			list = bresenham(pts[j-1].x, pts[j-1].y, pts[j].x, pts[j].y);
 			list.remove(0);
+			
 			newPts.addAll(list);
 		}
 		
@@ -692,6 +846,7 @@ public class GeometricCalculations {
 		list = bresenham(pts[pts.length-1].x, pts[pts.length-1].y, pts[0].x, pts[0].y);
 		list.remove(0);
 		newPts.addAll(list);
+		
 		
 		//converts to Point[]
 		Point[] pts2 = new Point[newPts.size()];
@@ -771,7 +926,14 @@ public class GeometricCalculations {
 	
 	
 	
-	//Provides pixels along a line
+	/**
+	 * Bresenham's line algorithm—generates all pixels along a line segment.
+	 * @param x1 start x coordinate
+	 * @param y1 start y coordinate
+	 * @param x2 end x coordinate
+	 * @param y2 end y coordinate
+	 * @return ArrayList of points on the line
+	 */
 	public static ArrayList<Point> bresenham(int x1, int y1, int x2, int y2) {
 		ArrayList<Point> line = new ArrayList<Point>();
 		

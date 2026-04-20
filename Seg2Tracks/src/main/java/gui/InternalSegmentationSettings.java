@@ -22,6 +22,10 @@ import calculations.DataType;
 import dataStructure.DataSet;
 import util.FileLoadFromOverlay;
 
+/**
+ * Dialog window for configuring internal (cell body) segmentation settings.
+ * Allows users to enable/disable edge exclusion filtering to remove segments touching image boundaries.
+ */
 public class InternalSegmentationSettings extends JFrame implements ActionListener {
 
 	JTextPane buttonGeneralInfo = new JTextPane();

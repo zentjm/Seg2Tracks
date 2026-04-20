@@ -15,18 +15,24 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 
 import analysisMethod.AnalysisMethod;
-import externalSegmentation.ExternalSegmentation;
-import internalSegmentation.InternalSegmentation;
 import linkage.Linkage;
+import sarn.Sarn;
+import segmentation.Segmentation;
 
+/**
+ * Dynamic class loader for Seg2Tracks plugin extensibility. Reads seg2tracks.config file and
+ * dynamically instantiates segmentation, linkage, SARN, and analysis method plugins at runtime.
+ * Enables the plugin architecture allowing third-party developers to add custom algorithms
+ * without modifying core plugin code.
+ */
 public class Seg2TracksClassLoader extends ClassLoader {
 
 	String fileName = "seg2tracks.config";
 	
 	//For operation panel
 	ArrayList<String> linkageClasses = new ArrayList<String>();
-	ArrayList<String> internalSegmentationClasses = new ArrayList<String>();
-	ArrayList<String> externalSegmentationClasses = new ArrayList<String>();
+	ArrayList<String> segmentationClasses = new ArrayList<String>();
+	ArrayList<String> sarnClasses = new ArrayList<String>();
 	
 	//For analysis panel
 	ArrayList<String> analysisMethodClasses = new ArrayList<String>();
@@ -49,24 +55,24 @@ public class Seg2TracksClassLoader extends ClassLoader {
              
             // Load the target class using its binary name
             Class<?> clazz = classLoader.loadClass(className);
-            System.out.println("Loaded class name: " + clazz.getName());
+            //System.out.println("Loaded class name: " + clazz.getName());
              
             //load initial constructor
             Constructor<?> constructor = clazz.getConstructor();
             clazzObject = constructor.newInstance();
        
             
-            System.out.println("Class name is: " + clazz.getName());
+            //System.out.println("Class name is: " + clazz.getName());
             
             
             //output
             Method method1 = clazz.getMethod("getName");
-            System.out.println("Method 1 name is: " + method1.getName());
-            System.out.println("Method 1 output is: " + method1.invoke(clazzObject));
+            //System.out.println("Method 1 name is: " + method1.getName());
+            //System.out.println("Method 1 output is: " + method1.invoke(clazzObject));
             
             Method method2 = clazz.getMethod("getDescription");
-            System.out.println("Method 2 name is: " + method2.getName());
-            System.out.println("Method 2 output is: " + method2.invoke(clazzObject));
+            //System.out.println("Method 2 name is: " + method2.getName());
+            //System.out.println("Method 2 output is: " + method2.invoke(clazzObject));
         	
             if (clazzObject instanceof Linkage) {
     			//System.out.println("Name is " + clazzObject.invoke())
@@ -137,11 +143,11 @@ public class Seg2TracksClassLoader extends ClassLoader {
             		if(spl[0].equals("linkage")) {
             			linkageClasses.add(line);
             		}
-            		if(spl[0].equals("internalSegmentation")) {
-            			internalSegmentationClasses.add(line);
+            		if(spl[0].equals("segmentation")) {
+            			segmentationClasses.add(line);
             		}
-            		if(spl[0].equals("externalSegmentation")) {
-            			externalSegmentationClasses.add(line);
+            		if(spl[0].equals("sarn")) {
+            			sarnClasses.add(line);
             		}
             		if(spl[0].equals("analysisMethod")) {
             			analysisMethodClasses.add(line);
@@ -163,18 +169,18 @@ public class Seg2TracksClassLoader extends ClassLoader {
 		return arr;
 	}
 	
-	public InternalSegmentation[] getInternalSegmentationMethods() {
-		InternalSegmentation [] arr = new InternalSegmentation[internalSegmentationClasses.size()];
-		for (int i = 0; i < internalSegmentationClasses.size(); i ++) {
-			arr[i] = (InternalSegmentation) initializeClass(internalSegmentationClasses.get(i));
+	public Segmentation[] getSegmentationMethods() {
+		Segmentation [] arr = new Segmentation[segmentationClasses.size()];
+		for (int i = 0; i < segmentationClasses.size(); i ++) {
+			arr[i] = (Segmentation) initializeClass(segmentationClasses.get(i));
 		}
 		return arr;
 	}
 	
-	public ExternalSegmentation[] getExternalSegmentationMethods() {
-		ExternalSegmentation [] arr = new ExternalSegmentation[externalSegmentationClasses.size()];
-		for (int i = 0; i < externalSegmentationClasses.size(); i ++) {
-			arr[i] = (ExternalSegmentation) initializeClass(externalSegmentationClasses.get(i));
+	public Sarn[] getSarnMethods() {
+		Sarn [] arr = new Sarn[sarnClasses.size()];
+		for (int i = 0; i < sarnClasses.size(); i ++) {
+			arr[i] = (Sarn) initializeClass(sarnClasses.get(i));
 		}
 		return arr;
 	}
@@ -191,15 +197,15 @@ public class Seg2TracksClassLoader extends ClassLoader {
 	
 	//TODO: Depreciated?
 	public String[] getInternalSegmentationMethodsBinary() {
-		String [] arr= new String[internalSegmentationClasses.size()];
-		arr = internalSegmentationClasses.toArray(arr);
+		String [] arr= new String[segmentationClasses.size()];
+		arr = segmentationClasses.toArray(arr);
 		return arr;
 	}
 	
 	//TODO: Depreciated?
 	public String[] getExternalSegmentationMethodsBinary() {
-		String [] arr= new String[externalSegmentationClasses.size()];
-		arr = externalSegmentationClasses.toArray(arr);
+		String [] arr= new String[sarnClasses.size()];
+		arr = sarnClasses.toArray(arr);
 		return arr;
 	}
 	

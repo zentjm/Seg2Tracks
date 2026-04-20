@@ -68,9 +68,11 @@ public class Seg2Tracks_ implements Command {
 	
 
 
-	//Constructor can be used for initialization
+	/**
+	 * Constructor for the Seg2Tracks_ plugin entry point.
+	 */
 	public Seg2Tracks_() {
-		
+
 	}
 	
 	/**
@@ -83,29 +85,32 @@ public class Seg2Tracks_ implements Command {
 	 *            unused
 	 */
 	public static void main(String[] args) {
-		
+
 		ImageJ ij = new ImageJ();
 		ij.command().run(Seg2Tracks_.class, true);
 		
 	}
 	
-	/** 
-	 * Loads the Seg2Tracks Plugin in the GUI
+/**
+	 * Initializes and loads the Seg2Tracks plugin user interface.
+	 * Validates ImageJ version compatibility, applies OS-specific UI themes,
+	 * and creates the model-controller architecture for the segmentation GUI.
 	 */
 	@Override
 	public void run() {
-		if (IJ.versionLessThan("1.27w")) return; // closes if imagej is out of date
-		
-		//Adapts menus to OS
+		// Exit if ImageJ version is too old
+		if (IJ.versionLessThan("1.27w")) return;
+
+		// Adapt UI menus and dialogs to match the current operating system's look and feel
 		try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception ex) {
             ex.printStackTrace();
         }
 
+		// Initialize the model-view-controller architecture
 		Seg2TracksModel model = new Seg2TracksModel();
 		Seg2TracksController controller = new Seg2TracksController(model);
-
 	}
 }	
 		

@@ -18,6 +18,11 @@ import dataStructure.Segment;
 import ij.ImagePlus;
 import ij.io.FileSaver;
 
+/**
+ * Top-level controller for the Seg2Tracks plugin. Manages the main application state, coordinates
+ * multiple operation and analysis panels, handles view switching between segmentation and analysis modes,
+ * and orchestrates data flow between components. Implements core plugin workflows and result export.
+ */
 public class Seg2TracksController {
 	Seg2TracksModel model;
 	
@@ -33,7 +38,9 @@ public class Seg2TracksController {
 	
 	DataSet[] dataSets;
 	
-	ImagePlus[] imageOverlays;
+	ArrayList<ArrayList<ImagePlus>> imageOverlays;
+	
+	//ImagePlus[] imageOverlays;
 	Workbook[] workbooks;
 	
 	Preferences preferences = Preferences.userRoot().node("/seg2tracks");
@@ -51,7 +58,11 @@ public class Seg2TracksController {
 		loadAnalysisControllers();
 		view = new Seg2TracksPanel(this, model, headPanel, floorPanel);
 		view.createView();
-		System.out.println("Created view");
+		// After all panels are constructed and the view is shown, do a final sweep so
+		// each panel's subsegmentation controls reflect the full controller list.
+		// Handles startup with multiple panels and any data already present at init time.
+		refreshSubsegmentationOnAllPanels();
+		//System.out.println("Created view");
 		analysisButtonEnabled = false;
 	}
 	
@@ -60,7 +71,7 @@ public class Seg2TracksController {
 		operationControllerList = new ArrayList<OperationController>();
 		operationModelList = model.getOperationModels();
 		for (int i = 0; i < operationModelList.size(); i ++) {
-			operationControllerList.add(new OperationController(this, operationModelList.get(i), operationModelList.get(i).getPanelNumber()));
+			operationControllerList.add(new OperationController(this, operationModelList.get(i), operationModelList.get(i).getPanelNumber(), true));
 		}
 	}
 	
@@ -89,7 +100,7 @@ public class Seg2TracksController {
 	}
 	
 	//Retrieve all information from the operation panels and switch to analysis view
-	public void switchToAnalysis() {
+	public void switchToAnalysis() { //TODO: switch the code below to just be updateDataSets
 		//Collect all dataSets from operations panels in an array
 		dataSets = new DataSet[operationControllerList.size()]; //New array for holding dataSets
 		for(int i = 0; i < operationControllerList.size(); i++) {
@@ -104,13 +115,21 @@ public class Seg2TracksController {
 		
 		//Load previous output field
 		
-		
-		
 		//Switch to the analysis panel.
 		 view.switchToAnalysis();
 		 updateAnalysisLoaded();
 	}
 	
+	
+	public void updateDataSets() {
+		dataSets = new DataSet[operationControllerList.size()]; //New array for holding dataSets
+		for(int i = 0; i < operationControllerList.size(); i++) {
+			dataSets[i] = operationControllerList.get(i).getDataSet();
+			if (dataSets[i] != null) { // panel may have no data loaded yet
+				dataSets[i].setDataSetName(operationControllerList.get(i).getDataSetName());
+			}
+		}
+	}
 	
 	public String getOutputField() {
 		return outputField;
@@ -124,19 +143,15 @@ public class Seg2TracksController {
 		return outputFilePath;
 	}
 	
-	
 	//Returns progress bar
 	public JProgressBar getProgressBar() {
 		return view.getProgressBar();
 	}
 	
-	
-	
 	//pushes pre-checked input file to the model
 	public void setOutputFilePath(String outputFilePath) {
 		this.outputFilePath = outputFilePath;
 	}
-	
 	
 	//TODO: Switch back to the operation screen
 	public void switchToOperation() {
@@ -146,7 +161,7 @@ public class Seg2TracksController {
 	
 	public void addOperationPanel() {
 		OperationModel tempMod = model.addOperationModel();
-		OperationController tempContr = new OperationController(this, tempMod, tempMod.getPanelNumber());
+		OperationController tempContr = new OperationController(this, tempMod, tempMod.getPanelNumber(), false);
 		operationModelList = model.getOperationModels();
 		operationControllerList.add(tempContr);
 		view.switchToOperation();
@@ -161,45 +176,50 @@ public class Seg2TracksController {
 	}
 	
 	public void exportResults() {
-		//Collect all analysis outputs from analysis panels
-		imageOverlays = new ImagePlus[analysisControllerList.size()];
+	
+		imageOverlays = new ArrayList<ArrayList<ImagePlus>>(analysisControllerList.size());
+		
 		workbooks = new Workbook[analysisControllerList.size()];
 		for(int i = 0; i < analysisControllerList.size(); i++) {
 			analysisControllerList.get(i).saveSettings(); //save the settings
-			imageOverlays[i] = analysisControllerList.get(i).getOverlayedImage();
+			imageOverlays.add(i, analysisControllerList.get(i).getOverlayedImages());
 			workbooks[i] = analysisControllerList.get(i).getWorkbook();
 		}
-		
-		//Get output directory
-		//String outputDirectory = headPanel.getOutputPath();
 		
 		//Save data
 		for(int i = 0; i < analysisControllerList.size(); i++) {
 
 			//Save ImagePlus with overlay
-			try {
-				//new FileSaver(imageOverlays[i]).saveAsTiff(outputDirectory + File.separator + "OverlayedImage_" + i + ".tif");
-				new FileSaver(imageOverlays[i]).saveAsTiff(outputFilePath + File.separator + "OverlayedImage_" + i + ".tif");
-			} 
-			catch (Exception e) {
-				System.out.println("Failed to save image overlay file: " + i);
-				e.printStackTrace();
+			for (int j = 0; j < imageOverlays.get(i).size(); j ++) {
+				try {
+					new FileSaver(imageOverlays.get(i).get(j)).saveAsTiff(outputFilePath + File.separator + "OverlayedImage_DataSet_" + i +
+							"_Method_" + imageOverlays.get(i).get(j).getTitle() + ".tif");
+				} 
+				catch (Exception e) {
+					//System.out.println("Failed to save image overlay file: " + i);
+					e.printStackTrace();
+				}
 			}
 				
 			//Save Workbook with overlay //TODO: Ability to add to workbook
 			try {
-				String fileName = outputFilePath + File.separator + "ResultsOutput_" + i + ".xlsx";
-				File file = new File(fileName);
+				String fileName = outputFilePath + File.separator + "ResultsOutput_DataSet_" + i + ".xlsx";
+				//File file = new File(fileName);
 				FileOutputStream outputStream = new FileOutputStream(fileName);
 				workbooks[i].write(outputStream);
 				//workbooks[i].close();	
 			}
 			
 			catch (Exception e) {
-				System.out.println("Failed to save results file: " + i);
+				//System.out.println("Failed to save results file: " + i);
 				e.printStackTrace();
-			}		
-		}	
+			}
+			
+			//Delete all data
+			analysisControllerList.get(i).setOverlayImage(null, true);
+			analysisControllerList.get(i).setWorkbook(null);
+			
+		}
 	}
 	
 	//TODO: does this do anything?
@@ -207,11 +227,27 @@ public class Seg2TracksController {
 		return dataSets;
 	}
 	
-
+	// Returns names of panels that have data loaded — used to populate the subsegmentation
+	// combobox. Panels with no data (null DataSet) are excluded; returns null if none loaded.
+	public String[] getDataSetNames() {
+		updateDataSets();
+		int loaded = 0;
+		for (DataSet ds : dataSets) if (ds != null) loaded++;
+		if (loaded == 0) return null;
+		String[] names = new String[loaded];
+		int j = 0;
+		for (DataSet ds : dataSets) {
+			if (ds != null) names[j++] = ds.getName();
+		}
+		return names;
+	}
+	
 	
 	//TODO, Some issues with removing panels
 	//Updates operation setting based on whether ALL possible segmentations have been run
 	public void allSegmentationLoaded() {
+		// Notify every panel so subsegmentation controls reflect newly available datasets
+		refreshSubsegmentationOnAllPanels();
 		for (OperationController ctrl: operationControllerList) {
 			if (!ctrl.isDataLoaded()) {
 				view.enableAnalysis(false);
@@ -220,22 +256,28 @@ public class Seg2TracksController {
 		}
 		view.enableAnalysis(true);
 	}
+
+	// Pushes the current dataset name list to every operation panel so their
+	// subsegmentation checkbox/combobox can be enabled or disabled as appropriate.
+	private void refreshSubsegmentationOnAllPanels() {
+		for (OperationController ctrl : operationControllerList) {
+			ctrl.refreshSubsegmentation();
+		}
+	}
 	
 	//Updates analysis setting based on whether analysis has been run
 	public void updateAnalysisLoaded() {
+		//System.out.println("Running Update Analysis Loaded");
 		for (AnalysisController ctrl: analysisControllerList) {
-
 			if (!ctrl.isDataLoaded()) {
 				view.enableResults(false);
+				//System.out.println("DISABLED result in Seg Controller");
 				return;
 			}
 		}
 		view.enableResults(true);
+		//System.out.println("enabling result in Seg Controller");
 	}
-	
-	
-	
-	
 	
 	//For making invisible when using manual segmentation
 	public void setViewActive(boolean enabled) {
@@ -244,7 +286,7 @@ public class Seg2TracksController {
 	
 	//Save data when exiting program. 
 	public void exitProgram() {
-		System.out.println("Exited Seg2Tracks");
+		//System.out.println("Exited Seg2Tracks");
 		
 		//Save Seg2TracksModel information (#panels)
 		model.saveSettings();

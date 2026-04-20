@@ -13,6 +13,10 @@ import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.JTextPane;
 
+/**
+ * STUB: Help menu window for displaying documentation and usage information about Seg2Tracks.
+ * Currently provides minimal functionality; intended for future expansion with comprehensive help content.
+ */
 public class HelpMenuPanel extends JFrame implements ActionListener{
 
 	//Fill out help general info
