@@ -60,7 +60,8 @@ public class FileResourcesUtil implements ActionListener {
 	private void getDataSetFileLocation() {
 		File directory = new File(getSystemDirectory() + File.separator + "Seg2Tracks");
 		System.out.println("directory: " + directory.toString());
-		if (!directory.isDirectory()) directory.mkdir();
+		if (!directory.isDirectory() && !directory.mkdir())
+			System.err.println("[Seg2Tracks] Could not create data directory: " + directory);
 		this.directory = directory;
 	}
 	
@@ -128,19 +129,48 @@ public class FileResourcesUtil implements ActionListener {
 	
 	//Loads from a DataFile
 	public DataSet loadDataSet (File loadFile) {
-		DataSet dataSet;
-		try {
-			ObjectInputStream objectIn = new ObjectInputStream(
-					new BufferedInputStream(new FileInputStream(loadFile)));
-			dataSet = (DataSet) objectIn.readObject();
-			objectIn.close();
-			return dataSet;
+		try (ObjectInputStream objectIn = new CompatObjectInputStream(
+				new BufferedInputStream(new FileInputStream(loadFile)))) {
+			return (DataSet) objectIn.readObject();
 		}
 		catch(Exception exc){
 			exc.printStackTrace(); // If there was an error, print the info.
 			System.out.println("Did not load file");
 		}
 		return null;
+	}
+
+	/**
+	 * ObjectInputStream that tolerates serialVersionUID drift on our own data classes.
+	 * <p>Several {@code dataStructure} classes had an explicit {@code serialVersionUID = 1L}
+	 * added in v0.5.1 (notably {@link dataStructure.LinkSetModel}); before that the JVM used
+	 * an auto-computed UID. That change silently broke loading of every dataset saved by an
+	 * earlier build. Because those edits only added the UID constant — the serialized field
+	 * layouts are unchanged — substituting the local class descriptor when the name resolves
+	 * lets us load old <em>and</em> new files interchangeably without corrupting field data.
+	 */
+	private static class CompatObjectInputStream extends ObjectInputStream {
+		CompatObjectInputStream(InputStream in) throws IOException { super(in); }
+
+		@Override
+		protected java.io.ObjectStreamClass readClassDescriptor()
+				throws IOException, ClassNotFoundException {
+			java.io.ObjectStreamClass streamDesc = super.readClassDescriptor();
+			try {
+				Class<?> local = Class.forName(streamDesc.getName(), false, getClass().getClassLoader());
+				java.io.ObjectStreamClass localDesc = java.io.ObjectStreamClass.lookup(local);
+				// Only override on UID mismatch, and only for our own serializable classes,
+				// so JDK/library descriptors are always read exactly as written.
+				if (localDesc != null
+						&& streamDesc.getName().startsWith("dataStructure.")
+						&& localDesc.getSerialVersionUID() != streamDesc.getSerialVersionUID()) {
+					return localDesc;
+				}
+			} catch (ClassNotFoundException ignore) {
+				// fall through — let the default resolution report the missing class
+			}
+			return streamDesc;
+		}
 	}
 		
 	//Loads from Overlay
@@ -165,16 +195,17 @@ public class FileResourcesUtil implements ActionListener {
 	
 	//Saves file to dir:Seg2Tracks
 	public boolean saveDataSet(Component panel, DataSet dataSet) {
-		String name =  JOptionPane.showInputDialog(panel, "Input save file name", "Save", JOptionPane.OK_CANCEL_OPTION);
-		try { 
-			File saveFile = new File (directory + File.separator + name);
-			FileOutputStream fileStream = new FileOutputStream(saveFile);
-			ObjectOutputStream objectStream = new ObjectOutputStream(fileStream);
-			objectStream.writeObject(dataSet);
-			objectStream.close();
+		String name = JOptionPane.showInputDialog(panel, "Input save file name", "Save", JOptionPane.OK_CANCEL_OPTION);
+		if (name == null || name.trim().isEmpty()) return false;
+		try {
+			File saveFile = new File(directory + File.separator + name);
+			try (FileOutputStream fileStream = new FileOutputStream(saveFile);
+			     ObjectOutputStream objectStream = new ObjectOutputStream(fileStream)) {
+				objectStream.writeObject(dataSet);
+			}
 			return true;
 		}
-		catch(Exception e) {
+		catch (Exception e) {
 			e.printStackTrace();
 		}
 		return false;
@@ -188,6 +219,7 @@ public class FileResourcesUtil implements ActionListener {
 				return name.startsWith("Autosave_");
 			}
 		});
+		if (list == null) list = new File[0]; // listFiles() returns null on I/O error
 		//Deletes autosaves older than the first four
 		if (list.length > autosaveNumber) {
 			//sorts files by creation date
@@ -219,15 +251,15 @@ public class FileResourcesUtil implements ActionListener {
 		int second = time.get(Calendar.SECOND);
 		
 		//Adds new autosave file
-		try { 
-			File saveFile = new File (directory + File.separator + "Autosave_" + day + "-" + hour + "-" + minute + "-" + second);
-			FileOutputStream fileStream = new FileOutputStream(saveFile);
-			ObjectOutputStream objectStream = new ObjectOutputStream(fileStream);
-			objectStream.writeObject(dataSet);
-			objectStream.close();
+		try {
+			File saveFile = new File(directory + File.separator + "Autosave_" + day + "-" + hour + "-" + minute + "-" + second);
+			try (FileOutputStream fileStream = new FileOutputStream(saveFile);
+			     ObjectOutputStream objectStream = new ObjectOutputStream(fileStream)) {
+				objectStream.writeObject(dataSet);
+			}
 			return true;
 		}
-		catch(Exception e) {
+		catch (Exception e) {
 			e.printStackTrace();
 			return false;
 		}

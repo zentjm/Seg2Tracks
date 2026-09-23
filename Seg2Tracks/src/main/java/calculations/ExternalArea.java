@@ -38,8 +38,6 @@ public class ExternalArea extends SegmentCalculation {
 	 */
 	@Override //TODO: Move calculations here
 	public double calculate() {
-		//System.out.println("ANSWER: " + GeometricCalculations.getAreaByRoi(segments[0].getExternalPerimeter()).length);
-		return (double) GeometricCalculations.getAreaByRoi
-				(segments[0].getExternalPerimeter()).length;
+		return (double) GeometricCalculations.getAreaByRoi(segment.getExternalPerimeter()).length;
 	}
 }

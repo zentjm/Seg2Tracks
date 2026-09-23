@@ -6,32 +6,39 @@ import geometricTools.GeometricCalculations;
 
 /**
  * Computes mean pixel intensity within a segmented cell.
- * Normalized intensity metric calculated as Integrated Intensity / Area.
- * Independent of cell size variations for intensity comparisons.
+ * Calculated as Integrated Intensity / Area — normalised by cell size so results
+ * are comparable across cells of different areas.
+ *
+ * <h3>Dependency injection</h3>
+ * {@code MeanIntensity} depends on {@link Area} and {@link IntegratedIntensity}.
+ * The caller must pass the same instances that appear in {@code segmentCalculations()}
+ * so that {@link #setSegment} is applied consistently to all three.
  */
 public class MeanIntensity extends SegmentCalculation {
 
+	private final Area area;
+	private final IntegratedIntensity integratedIntensity;
+
 	/**
-	 * Indicates whether this metric should be used in LinkSet and FrameSet statistics.
-	 *
-	 * @return true (Mean Intensity is a statistic)
+	 * @param area                the {@link Area} instance shared with the analysis method
+	 * @param integratedIntensity the {@link IntegratedIntensity} instance shared with the analysis method
 	 */
-	@Override
-	public boolean isStatistic() {
-		return true;
+	public MeanIntensity(Area area, IntegratedIntensity integratedIntensity) {
+		this.area                = area;
+		this.integratedIntensity = integratedIntensity;
 	}
 
 	/**
-	 * Calculate mean intensity by dividing total cell intensity by area.
-	 * Depends on Area and Integrated Intensity calculations being available.
+	 * Calculate mean intensity as Integrated Intensity / Area.
+	 * Returns {@code Double.NaN} if area is zero (degenerate segment).
 	 *
-	 * @return mean pixel intensity within the cell
+	 * @return mean pixel intensity within the cell boundary
 	 */
 	@Override
 	public double calculate() {
-		double area = segments[0].getCalculation("Area");
-		double integratedIntensity = segments[0].getCalculation("Integrated Intensity");
-		return integratedIntensity/area;
+		double a = area.get();
+		if (a == 0) return Double.NaN;
+		return integratedIntensity.get() / a;
 	}
 
 	/**
@@ -43,5 +50,4 @@ public class MeanIntensity extends SegmentCalculation {
 	public String getName() {
 		return "Mean Intensity";
 	}
-
 }

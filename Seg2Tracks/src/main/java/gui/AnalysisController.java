@@ -334,6 +334,25 @@ public class AnalysisController implements ActionListener {
 				model.runIt(); 
 				return null;
 			}
+
+			/**
+			 * Surfaces exceptions thrown by the analysis. Without calling get(),
+			 * SwingWorker swallows them and the user just sees no export.
+			 */
+			@Override
+			protected void done() {
+				try {
+					get();
+				} catch (java.util.concurrent.ExecutionException e) {
+					Throwable cause = (e.getCause() != null) ? e.getCause() : e;
+					cause.printStackTrace();
+					getProgressBar().setString("Analysis Failed");
+					JOptionPane.showMessageDialog(null, "Analysis failed:\n\n" + cause.getMessage(),
+						"Analysis Error", JOptionPane.ERROR_MESSAGE);
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
+			}
 		};
 	}
 	

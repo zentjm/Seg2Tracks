@@ -154,13 +154,19 @@ public abstract class SegmentModel implements Serializable {
 	}
 
 	/**
-	 * Retrieves a cached calculation result.
+	 * Retrieves a cached calculation result by name.
+	 * Returns {@code Double.NaN} if the calculation map is uninitialised (e.g. after
+	 * deserialisation, since the map is {@code transient}) or if the requested
+	 * calculation was never registered on this segment.
+	 *
 	 * @param name calculation name
-	 * @return calculated value
+	 * @return calculated value, or {@code Double.NaN} if unavailable
 	 */
 	public double getCalculation(String name) {
-		// System.out.println("Getting calculation map: " + name + "  " + calculationMap.get(name).get());
-		return calculationMap.get(name).get();
+		if (calculationMap == null) return Double.NaN;
+		SegmentCalculation calc = calculationMap.get(name);
+		if (calc == null) return Double.NaN;
+		return calc.get();
 	}
 
 	/**

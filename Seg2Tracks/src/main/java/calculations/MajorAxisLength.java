@@ -28,8 +28,7 @@ public class MajorAxisLength extends SegmentCalculation {
 	@Override
 	public double calculate() {
 		MatrixFunctions functions = new MatrixFunctions();
-		// getMajorAxis returns a Point array representing the major axis vector
-		return functions.getMajorAxis(segments[0].getCenterPoint(), segments[0].getInternalPerimeter()).length;
+		return functions.getMajorAxis(segment.getCenterPoint(), segment.getInternalPerimeter()).length;
 	}
 
 	/**

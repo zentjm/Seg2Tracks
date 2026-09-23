@@ -1,5 +1,8 @@
 package analysisMethod;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import calculations.Data;
 import calculations.FrameSetCalculation;
 import calculations.FrameSetStatistic;
@@ -18,7 +21,18 @@ import ij.plugin.frame.RoiManager;
 /**
  * Abstract base class for analysis methods that perform data operations followed by hierarchical quantification.
  * Provides framework for transforming DataSets and computing multi-level statistics (Segment -> LinkSet/FrameSet -> DataSet).
- * Handles sheet management, calculation setup, result retrieval, and overlay generation.
+ *
+ * <h3>Output format</h3>
+ * Wide format (one row per entity, one column per calculation/statistic),
+ * optimised for Excel pivot chart integration.  Three sheets are produced:
+ * <ol>
+ *   <li>Segment Data  — one row per (LinkSet × frame/segment)
+ *   <li>Track Data    — one row per LinkSet, with direct LinkSet calculations and
+ *                       per-statistic × per-calculation stat columns
+ *   <li>Frame Data    — one row per frame, with direct FrameSet calculations and
+ *                       per-statistic × per-calculation stat columns
+ * </ol>
+ * Statistic columns follow the pattern {@code StatName_CalcName} (e.g. {@code LinkSetMean_Area}).
  */
 public abstract class OperationMethod extends AnalysisMethod {
 
@@ -26,52 +40,105 @@ public abstract class OperationMethod extends AnalysisMethod {
 	int frameSetSheet;
 	int linkSetSheet;
 
-	String segmentCalculationNames[];
-	String linkSetCalculationNames[];
-	String linkSetStatisticNames[];
-	String frameSetCalculationNames[];
-	String frameSetStatisticNames[];
+	// ── Cached calculation name arrays ────────────────────────────────────────
+	// Populated in defineSheets() by harvesting names from fresh instances.
+	// Reused in setCalculations() (to skip re-creation) and retrieveCalculations()
+	// (to identify which names to look up on stored data objects).
 
-	String segmentSheetName = "SegmentModel Calculations";
-	String linkSetSheetName = "LinkSet Calculations";
-	String frameSetSheetName = "FrameSet Calculations";
+	String[] segmentCalculationNames;
+
+	/**
+	 * Subset of {@link #segmentCalculationNames} containing only the names of
+	 * segment calculations whose {@link calculations.SegmentCalculation#isStatistic()}
+	 * returns {@code true}.  These drive LinkSet-level and FrameSet-level aggregate
+	 * statistic column headers (e.g. {@code LinkSetMean_Area}).
+	 */
+	String[] segmentStatisticCalculationNames;
+
+	String[] linkSetCalculationNames;
+	String[] linkSetStatisticNames;
+	String[] frameSetCalculationNames;
+	String[] frameSetStatisticNames;
 
 
 	/**
 	 * Execute the primary analysis workflow.
 	 * Transforms input datasets using dataOperation() and stores as outputDataSets.
 	 */
-	//Takes an input DataSet[] and returns it with or without modifications
 	public final void analyze() {
 		outputDataSets = dataOperation(dataSets);
 	}
 
 	/**
-	 * Define result workbook sheets with appropriate column headers.
-	 * //TODO: Have it only add new sheets if they do not exist, otherwise just add to them
-	 * Creates three standard sheets: SegmentModel, LinkSet, and FrameSet calculations.
+	 * Define result workbook sheets with wide-format column headers.
+	 * Names are harvested from fresh calculation instances so adding a new
+	 * calculation automatically extends the relevant sheet.
+	 *
+	 * Three sheets are created:
+	 * <ul>
+	 *   <li><b>Segment Data</b>  — one column per segment calculation
+	 *   <li><b>Track Data</b>    — LinkSet calculation columns + stat×calc columns
+	 *   <li><b>Frame Data</b>    — FrameSet calculation columns + stat×calc columns
+	 * </ul>
 	 */
-	//TODO: Have it only add new sheets if they do not exist, otherwise just add to them
-	//default sheet definition
+	@Override
 	void defineSheets() {
-		segmentModelSheet = workbook.addSheet(segmentSheetName,
-				new String[] {"DataSet", "Analysis Method", "LinkSet", "Frame", "Calculation", "Value"});
-		frameSetSheet = workbook.addSheet(frameSetSheetName,
-				new String[] {"DataSet", "Analysis Method", "FrameSet", " FrameSet Calculation", "Segment Calculation", "Value"});
-		linkSetSheet = workbook.addSheet(linkSetSheetName,
-				new String[] {"DataSet", "Analysis Method", "LinkSet", "LinkSet Calculation", "Segment Calculation", "Value"});
-	}
+		// Harvest names from fresh instances (thrown away — real instances are
+		// created fresh per data object in setCalculations()).
+		SegmentCalculation[] segCalcs = segmentCalculations();
+		segmentCalculationNames = names(segCalcs);
 
+		// Stat-eligible subset: isStatistic() == true (default is true for all).
+		int statCount = 0;
+		if (segCalcs != null) {
+			for (SegmentCalculation c : segCalcs) if (c.isStatistic()) statCount++;
+		}
+		segmentStatisticCalculationNames = new String[statCount];
+		int si = 0;
+		if (segCalcs != null) {
+			for (SegmentCalculation c : segCalcs)
+				if (c.isStatistic()) segmentStatisticCalculationNames[si++] = c.getName();
+		}
+
+		linkSetCalculationNames  = names(linkSetCalculations());
+		linkSetStatisticNames    = names(linkSetStatistics());
+		frameSetCalculationNames = names(frameSetCalculations());
+		frameSetStatisticNames   = names(frameSetStatistics());
+
+		// 1. Segment Data — one row per (LinkSet × segment)
+		segmentModelSheet = workbook.addSheet("Segment Data",
+			wideHeaders(
+				new String[]{"DataSet", "Method", "LinkSet", "Frame"},
+				segmentCalculationNames));
+
+		// 2. Track Data — one row per LinkSet
+		//    Stat columns: StatName_CalcName (e.g. LinkSetMean_Area)
+		linkSetSheet = workbook.addSheet("Track Data",
+			wideHeaders(
+				new String[]{"DataSet", "Method", "LinkSet"},
+				linkSetCalculationNames,
+				statCalcHeaders(linkSetStatisticNames, segmentStatisticCalculationNames)));
+
+		// 3. Frame Data — one row per frame
+		//    Stat columns: StatName_CalcName (e.g. FrameSetMean_Area)
+		frameSetSheet = workbook.addSheet("Frame Data",
+			wideHeaders(
+				new String[]{"DataSet", "Method", "Frame"},
+				frameSetCalculationNames,
+				statCalcHeaders(frameSetStatisticNames, segmentStatisticCalculationNames)));
+	}
 
 
 	/**
 	 * Configure all segment, LinkSet, and FrameSet calculations for execution.
 	 * Assigns calculation objects to their respective data structures and sets up target image stack.
 	 * Called during workflow to prepare calculations before results are retrieved.
+	 *
+	 * Name arrays are already populated by {@link #defineSheets()} — this method
+	 * only wires fresh calculation instances to their data objects.
 	 */
-	//dataSet calculation setter
 	public void setCalculations() {
-		for(DataSet dataSet : outputDataSets) {
+		for (DataSet dataSet : outputDataSets) {
 
 			progressBar.setString("Planning Calculations");
 			progressBar.setMaximum(dataSet.getLinkSetList().size());
@@ -80,74 +147,49 @@ public abstract class OperationMethod extends AnalysisMethod {
 
 			for (LinkSet linkSet : dataSet.getLinkSetList()) {
 
-				//Set segment calculations
-				int segmentCount = 0;
+				// ── Segment calculations ──────────────────────────────────────────
 				for (Segment segment : linkSet) {
-					segmentCount ++;
-					//System.out.println("Linkset " + linkSet.getDisplayName() +" Segment: " + segmentCount);
 					SegmentCalculation[] segCalcs = segmentCalculations();
 					if (segCalcs != null) {
-						for (SegmentCalculation segCalc: segCalcs) {
+						for (SegmentCalculation segCalc : segCalcs) {
 							segCalc.setTargetStackSlice(stack, segment.getFrame() + 1);
 						}
-						if (segmentCalculationNames == null) {
-							segmentCalculationNames = new String[segCalcs.length];
-							for (int i = 0; i < segCalcs.length; i ++) {
-								segmentCalculationNames[i] = segCalcs[i].getName();
-							}
-						}
-						for (SegmentCalculation calc: segCalcs) {
-							//System.out.println("Segment calculation: " + segment.getName());
+						for (SegmentCalculation calc : segCalcs) {
 							segment.setCalculation(calc);
-							calc.setSegments(segment);
+							calc.setSegment(segment);
 						}
 					}
 				}
 
-				//Set LinkSet Calculations/Statistics
+				// ── LinkSet calculations ──────────────────────────────────────────
 				LinkSetCalculation[] linkCalcs = linkSetCalculations();
 				if (linkCalcs != null) {
-					if (linkSetCalculationNames == null) {
-						linkSetCalculationNames = new String[linkCalcs.length];
-						for (int i = 0; i < linkCalcs.length; i ++) {
-							linkSetCalculationNames[i] = linkCalcs[i].getName();
-						}
-					}
-					for (LinkSetCalculation calc: linkCalcs) {
+					for (LinkSetCalculation calc : linkCalcs) {
 						linkSet.setCalculation(calc);
 						calc.setLinkSet(linkSet);
 					}
 				}
 
+				// ── LinkSet statistics ────────────────────────────────────────────
 				LinkSetStatistic[] linkStats = linkSetStatistics();
 				if (linkStats != null) {
-					if (linkSetStatisticNames == null) {
-						linkSetStatisticNames = new String[linkStats.length];
-						for (int i = 0; i < linkStats.length; i ++) {
-							linkSetStatisticNames[i] = linkStats[i].getName();
-						}
-					}
 					for (LinkSetStatistic stat : linkStats) {
 						linkSet.setStatistic(stat);
 						stat.setLinkSet(linkSet);
 					}
 				}
-				progress ++;
+
+				progress++;
 				progressBar.setValue(progress);
 			}
 
-			//Set FrameSet Calculations/Statistics
+			// ── FrameSet calculations and statistics ──────────────────────────────
 			for (FrameSet frameSet : dataSet.getFrameSetList()) {
+				if (frameSet == null) continue; // frames with no segments leave a null slot
 
 				FrameSetCalculation[] frameCalcs = frameSetCalculations();
 				if (frameCalcs != null) {
-					if (frameSetCalculationNames == null) {
-						frameSetCalculationNames = new String[frameCalcs.length];
-						for (int i = 0; i < frameCalcs.length; i ++) {
-							frameSetCalculationNames[i] = frameCalcs[i].getName();
-						}
-					}
-					for (FrameSetCalculation calc: frameCalcs) {
+					for (FrameSetCalculation calc : frameCalcs) {
 						frameSet.setCalculation(calc);
 						calc.setFrameSet(frameSet);
 					}
@@ -155,12 +197,6 @@ public abstract class OperationMethod extends AnalysisMethod {
 
 				FrameSetStatistic[] frameStats = frameSetStatistics();
 				if (frameStats != null) {
-					if (frameSetStatisticNames == null) {
-						frameSetStatisticNames = new String[frameStats.length];
-						for (int i = 0; i < frameStats.length; i ++) {
-							frameSetStatisticNames[i] = frameStats[i].getName();
-						}
-					}
 					for (FrameSetStatistic stat : frameStats) {
 						frameSet.setStatistic(stat);
 						stat.setFrameSet(frameSet);
@@ -168,22 +204,26 @@ public abstract class OperationMethod extends AnalysisMethod {
 				}
 			}
 
-		//TODO: Set DataSet Calculations/Statistics
+			//TODO: Set DataSet Calculations/Statistics
 		}
 	}
 
 
 	/**
-	 * Retrieve all calculation results and populate the result workbook.
-	 * Iterates through all datasets, linksets, segments, and framesets, collecting computed metrics.
+	 * Retrieve all calculation results and populate the result workbook with wide-format rows.
+	 *
+	 * <ul>
+	 *   <li>Sheet 1 (<b>Segment Data</b>)  — one row per (LinkSet × segment)
+	 *   <li>Sheet 2 (<b>Track Data</b>)    — one row per LinkSet
+	 *   <li>Sheet 3 (<b>Frame Data</b>)    — one row per frame
+	 * </ul>
 	 */
-	//dataSet calculation getter
 	public void retrieveCalculations() {
 
+		for (DataSet dataSet : outputDataSets) {
 
-		for(DataSet dataSet : outputDataSets) {
-
-			progressBar.setString("Calculating Functions");
+			// ── Sheet 1: Segment Data ─────────────────────────────────────────────
+			progressBar.setString("Calculating Segment Data");
 			progressBar.setMinimum(0);
 			progressBar.setMaximum(dataSet.getLinkSetList().size());
 			progressBar.setValue(0);
@@ -191,101 +231,83 @@ public abstract class OperationMethod extends AnalysisMethod {
 
 			for (LinkSet linkSet : dataSet.getLinkSetList()) {
 				for (Segment segment : linkSet) {
-					//SegmentCalculation[] calcs = segmentCalculations(); //TODO: this necessary?
+					List<Object> row = new ArrayList<>();
+					row.add(dataSet.getName());
+					row.add(methodName);
+					row.add(linkSet.getDisplayName());
+					row.add(segment.getFrame() + 1);  // 1-based frame number
 					if (segmentCalculationNames != null) {
-						for (String name: segmentCalculationNames) {
-						//for (SegmentCalculation calc : calcs) { //TODO: Can refine to get only specified calculations or include all underlying calculations as well
-
-							Object[] segmentCalculations = new Object[] {
-								dataSet.getName(), 			//dataset
-								methodName,					//method
-								linkSet.getDisplayName(),			//linkSet
-								segment.getFrame() + 1,		//frame
-								name,
-								segment.getCalculation(name)
-							};
-							workbook.addLine(segmentModelSheet, segmentCalculations);
+						for (String name : segmentCalculationNames) {
+							row.add(segment.getCalculation(name));
 						}
 					}
+					workbook.addLine(segmentModelSheet, row.toArray());
 				}
-				if (linkSetCalculationNames != null) {
-					for (String name: linkSetCalculationNames) {
-						Object[] linkSetCalculations = new Object[] {
-							dataSet.getName(), 				//dataset
-							methodName,						//method
-							linkSet.getDisplayName(),				//linkSet
-							name,
-							"N/A",
-							linkSet.getCalculation(name)	//calculation
-						};
-						workbook.addLine(linkSetSheet, linkSetCalculations);
-					}
-				}
-				if (linkSetStatisticNames != null) {
-					for (String statistic: linkSetStatisticNames) {
-						for (String calculation: segmentCalculationNames) {
-							//TODO: if calculation is a statistic
-							Object[] linkSetStatistics = new Object[] {
-								dataSet.getName(), 				//dataset
-								methodName,						//method
-								linkSet.getDisplayName(),				//linkSet
-								statistic, 							//calculation name
-								calculation,
-								linkSet.getStatistic(statistic, calculation)	//calculation
-							};
-							workbook.addLine(linkSetSheet, linkSetStatistics);
-						}
-					}
-				}
-				progress ++;
+				progress++;
 				progressBar.setValue(progress);
-				//System.out.println("Progress is: " + progress + "/" + dataSet.getLinkSetList().size());
-
-				/*TEST
-				try {
-					Thread.sleep(1000);
-				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-				*/
-
-
 			}
 
-			for (FrameSet frameSet : dataSet.getFrameSetList()) {
+			// ── Sheet 2: Track Data ───────────────────────────────────────────────
+			progressBar.setString("Calculating Track Data");
+			progressBar.setValue(0);
+			progress = 0;
 
-				if (frameSetCalculationNames != null) {
-					for (String name: frameSetCalculationNames) {
-						Object[] frameSetCalculations = new Object[] {
-							dataSet.getName(), 				//dataset
-							methodName,						//method
-							frameSet.getFrame(),				//frame
-							name,
-							"N/A",
-							frameSet.getCalculation(name)	//calculation
-						};
-						workbook.addLine(frameSetSheet, frameSetCalculations);
+			for (LinkSet linkSet : dataSet.getLinkSetList()) {
+				List<Object> row = new ArrayList<>();
+				row.add(dataSet.getName());
+				row.add(methodName);
+				row.add(linkSet.getDisplayName());
+
+				// Direct LinkSet calculations (e.g. AreaDistribution)
+				if (linkSetCalculationNames != null) {
+					for (String name : linkSetCalculationNames) {
+						row.add(linkSet.getCalculation(name));
 					}
 				}
-
-				if (frameSetStatisticNames != null) {
-					for (String statistic: frameSetStatisticNames) {
-						for (String calculation: segmentCalculationNames) {
-							//TODO: if calculation is a statistic
-							Object[] frameSetStatistics = new Object[] {
-								dataSet.getName(), 				//dataset
-								methodName,						//method
-								frameSet.getFrame(),				//linkSet
-								statistic, 							//calculation name
-								calculation,
-								frameSet.getStatistic(statistic, calculation)	//calculation
-							};
-							workbook.addLine(frameSetSheet, frameSetStatistics);
+				// Stat columns: one per (stat × statistic-eligible segment calc)
+				if (linkSetStatisticNames != null && segmentStatisticCalculationNames != null) {
+					for (String stat : linkSetStatisticNames) {
+						for (String calc : segmentStatisticCalculationNames) {
+							row.add(linkSet.getStatistic(stat, calc));
 						}
-					}		//TODO: get
+					}
 				}
+				workbook.addLine(linkSetSheet, row.toArray());
+				progress++;
+				progressBar.setValue(progress);
+			}
 
+			// ── Sheet 3: Frame Data ───────────────────────────────────────────────
+			progressBar.setString("Calculating Frame Data");
+			progressBar.setMinimum(0);
+			progressBar.setMaximum(dataSet.getFrameSetList().length);
+			progressBar.setValue(0);
+			progress = 0;
+
+			for (FrameSet frameSet : dataSet.getFrameSetList()) {
+				if (frameSet == null) continue; // frames with no segments leave a null slot
+				List<Object> row = new ArrayList<>();
+				row.add(dataSet.getName());
+				row.add(methodName);
+				row.add(frameSet.getFrame() + 1);  // 1-based frame number
+
+				// Direct FrameSet calculations
+				if (frameSetCalculationNames != null) {
+					for (String name : frameSetCalculationNames) {
+						row.add(frameSet.getCalculation(name));
+					}
+				}
+				// Stat columns: one per (stat × statistic-eligible segment calc)
+				if (frameSetStatisticNames != null && segmentStatisticCalculationNames != null) {
+					for (String stat : frameSetStatisticNames) {
+						for (String calc : segmentStatisticCalculationNames) {
+							row.add(frameSet.getStatistic(stat, calc));
+						}
+					}
+				}
+				workbook.addLine(frameSetSheet, row.toArray());
+				progress++;
+				progressBar.setValue(progress);
 			}
 		}
 	}
@@ -300,8 +322,7 @@ public abstract class OperationMethod extends AnalysisMethod {
 	 */
 	void dataSetToOverlay(Overlay overlay, RoiManager manager) {
 
-		//Iterate dataSets
-		for (DataSet dataSet: outputDataSets) {
+		for (DataSet dataSet : outputDataSets) {
 
 			progressBar.setString("Generating Overlay");
 			progressBar.setMinimum(0);
@@ -309,14 +330,12 @@ public abstract class OperationMethod extends AnalysisMethod {
 			progressBar.setValue(0);
 			int progress = 0;
 
-
 			Segment segment;
 			//TODO: show cell linkage (here only segmentation)
 			for (int i = 0; i < dataSet.getFrameSetList().length; i++) {
 				for (int j = 0; j < dataSet.getFrameSet(i).size(); j++) {
 					segment = dataSet.getFrameSet(i).get(j);
 					Roi roi = getOverlayParameter(segment);
-					//if (roi.getContainedPoints().length < 0) continue; //TODO: does this do anything?
 					roi.setStrokeColor(getColor(segment));
 					roi.setFillColor(getColor(segment));
 					roi.setPosition(segment.getFrame() + 1);
@@ -324,8 +343,7 @@ public abstract class OperationMethod extends AnalysisMethod {
 					manager.add(target, roi, segment.getFrame() + 1);
 					overlay.add(roi, "Set:" + dataSet.getName() + ", Seg #" + segment.getLinkSet().getDisplayName());
 				}
-
-				progress ++;
+				progress++;
 				progressBar.setValue(progress);
 			}
 		}
@@ -335,11 +353,11 @@ public abstract class OperationMethod extends AnalysisMethod {
 	/**
 	 * Collect all Data objects from this analysis method.
 	 * Returns combined array of segment, linkset, and frameset calculations/statistics.
-	 * //TODO --
+	 * //TODO —
 	 *
 	 * @return array of all Data calculation objects
 	 */
-	//TODO --
+	//TODO —
 	public Data[] getCalculations() {
 
 		Data[][] dataArrays = new Data[][] {
@@ -351,33 +369,73 @@ public abstract class OperationMethod extends AnalysisMethod {
 		};
 
 		int length = 0;
-		for (Data [] array: dataArrays) {
-			if (array!= null) length += array.length;
+		for (Data[] array : dataArrays) {
+			if (array != null) length += array.length;
 		}
 		int k = 0;
-		Data [] ar = new Data [length];
-		for (Data [] array: dataArrays) {
+		Data[] ar = new Data[length];
+		for (Data[] array : dataArrays) {
 			if (array == null) continue;
 			for (Data data : array) {
-				//System.out.println("Returning Calculation: " + data);
 				ar[k] = data;
 				k++;
 			}
 		}
-
 		return ar;
-
-
-			//TODO:
-			//Data[] linkCalcs = linkSetCalculations();
-			//Data[] linkStats = linkSetStatistics();
-			//Data[] frameCalcs = frameSetCalculations();
-			//Data[] framceStats = frameSetStatistics();
 	}
 
 
+	// ── Private helpers ───────────────────────────────────────────────────────
 
-	//ABSTRACT CLASSES
+	/**
+	 * Extracts {@link Data#getName()} from every element of a Data array.
+	 * Returns an empty array (never null) if the input is null or empty.
+	 */
+	private String[] names(Data[] calcs) {
+		if (calcs == null || calcs.length == 0) return new String[0];
+		String[] out = new String[calcs.length];
+		for (int i = 0; i < calcs.length; i++) out[i] = calcs[i].getName();
+		return out;
+	}
+
+	/**
+	 * Concatenates a fixed prefix array with one or more additional name arrays
+	 * into a single flat String[] suitable for {@link dataStructure.ResultWorkbook#addSheet}.
+	 * Null or empty arrays in {@code extra} are skipped.
+	 */
+	private String[] wideHeaders(String[] prefix, String[]... extra) {
+		int total = prefix.length;
+		for (String[] arr : extra) if (arr != null) total += arr.length;
+		String[] out = new String[total];
+		int pos = 0;
+		System.arraycopy(prefix, 0, out, pos, prefix.length);
+		pos += prefix.length;
+		for (String[] arr : extra) {
+			if (arr == null || arr.length == 0) continue;
+			System.arraycopy(arr, 0, out, pos, arr.length);
+			pos += arr.length;
+		}
+		return out;
+	}
+
+	/**
+	 * Generates column header strings for every (statistic × calculation) pair.
+	 * Pattern: {@code statName + "_" + calcName} (e.g. "LinkSetMean_Area").
+	 * Returns an empty array if either input is null or empty.
+	 */
+	private String[] statCalcHeaders(String[] statNames, String[] calcNames) {
+		if (statNames == null || statNames.length == 0
+				|| calcNames == null || calcNames.length == 0) return new String[0];
+		String[] out = new String[statNames.length * calcNames.length];
+		int i = 0;
+		for (String stat : statNames) {
+			for (String calc : calcNames) out[i++] = stat + "_" + calc;
+		}
+		return out;
+	}
+
+
+	// ── Abstract methods ──────────────────────────────────────────────────────
 
 	/**
 	 * Transform or manipulate input DataSets before analysis.
@@ -386,7 +444,6 @@ public abstract class OperationMethod extends AnalysisMethod {
 	 * @param inputSets array of input DataSets
 	 * @return array of processed DataSets for analysis
 	 */
-	//Performs operations on DataSets
 	abstract DataSet[] dataOperation(DataSet[] inputSets);
 
 	/**
@@ -396,7 +453,6 @@ public abstract class OperationMethod extends AnalysisMethod {
 	 * @param segment the Segment to extract ROI for
 	 * @return Roi representing the segment boundary
 	 */
-	//Defines returned Overlay
 	abstract Roi getOverlayParameter(Segment segment);
 
 	/**
@@ -404,7 +460,6 @@ public abstract class OperationMethod extends AnalysisMethod {
 	 *
 	 * @return array of SegmentCalculation objects
 	 */
-	//Calculates workbook data
 	abstract SegmentCalculation[] segmentCalculations();
 
 	/**
@@ -434,8 +489,5 @@ public abstract class OperationMethod extends AnalysisMethod {
 	 * @return array of FrameSetStatistic objects
 	 */
 	abstract FrameSetStatistic[] frameSetStatistics();
-
-
-
 
 }

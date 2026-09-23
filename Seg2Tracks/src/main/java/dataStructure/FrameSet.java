@@ -52,10 +52,12 @@ public class FrameSet extends ArrayList<Segment> {
 	/**
 	 * Retrieves a cached frame-level calculation.
 	 * @param name name of calculation
-	 * @return calculated value
+	 * @return calculated value, or {@code Double.NaN} if unavailable
 	 */
 	public double getCalculation(String name) {
-		return calculationMap.get(name).get();
+		if (calculationMap == null) return Double.NaN;
+		FrameSetCalculation c = calculationMap.get(name);
+		return (c != null) ? c.get() : Double.NaN;
 	}
 
 	/**
@@ -71,19 +73,20 @@ public class FrameSet extends ArrayList<Segment> {
 	 * Retrieves a cached frame-level statistic.
 	 * @param statistic name of statistic
 	 * @param calculation name of underlying calculation
-	 * @return statistical result
+	 * @return statistical result, or {@code Double.NaN} if unavailable
 	 */
 	public double getStatistic(String statistic, String calculation) {
-		return statisticMap.get(statistic).get(calculation);
+		if (statisticMap == null) return Double.NaN;
+		FrameSetStatistic s = statisticMap.get(statistic);
+		return (s != null) ? s.get(calculation) : Double.NaN;
 	}
 
 	/**
 	 * Removes a Segment from this frame.
 	 * @param segment SegmentModel to remove
 	 */
-	// STUB: method not yet implemented — needs to be completed
-	public void removeSegment (SegmentModel segment) {
-		// TODO: remove the segment from this frame's ArrayList
+	public void removeSegment(SegmentModel segment) {
+		remove(segment);
 	}
 	
 	

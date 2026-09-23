@@ -314,6 +314,7 @@ public class DataSet implements Serializable {
 		// TODO: Other components need to be integrated into this?
 		// UNCLEAR: Should this also update related calculations or visualizations?
 		for (int i = 0; i < this.getFrameSetList().length; i++) {
+			if (this.getFrameSet(i) == null) continue;
 			for (Segment segment: this.getFrameSet(i)) {
 				if (type == 0) segment.setInternalPerimeter(null); // Clear internal boundaries
 				if (type == 1) segment.setExternalPerimeter(null); // Clear external boundaries

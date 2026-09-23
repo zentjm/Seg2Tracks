@@ -1,10 +1,13 @@
 package calculations;
 
 import dataStructure.Segment;
+import geometricTools.GeometricCalculations;
 
 /**
  * Computes the length of the external (outer) perimeter boundary of a segmented cell.
- * Measures the pixel count along the external boundary.
+ * Measures the true geometric arc length along the external boundary (sum of Euclidean
+ * distances between consecutive perimeter points), not the point count — the point count
+ * is an incidental artifact of how the boundary was simplified, not a length measurement.
  * Used to characterize cell margin properties and boundary complexity.
  */
 public class ExternalPerimeter extends SegmentCalculation {
@@ -31,12 +34,11 @@ public class ExternalPerimeter extends SegmentCalculation {
 
 	/**
 	 * Calculate the external perimeter length in pixels.
-	 * //TODO: Move calculations here
 	 *
-	 * @return length of external perimeter boundary
+	 * @return geometric arc length of the external perimeter boundary
 	 */
-	@Override //TODO: Move calculations here
+	@Override
 	public double calculate() {
-		return (double) segments[0].getExternalPerimeter().length;
+		return GeometricCalculations.arcLength(segment.getExternalPerimeter());
 	}
 }

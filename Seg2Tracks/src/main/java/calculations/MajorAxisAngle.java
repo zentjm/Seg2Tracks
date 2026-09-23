@@ -28,8 +28,7 @@ public class MajorAxisAngle extends SegmentCalculation {
 	@Override
 	public double calculate() {
 		MatrixFunctions functions = new MatrixFunctions();
-		// Compute major axis but only retrieve the theta angle, not the vector
-		functions.getMajorAxis(segments[0].getCenterPoint(), segments[0].getInternalPerimeter());
+		functions.getMajorAxis(segment.getCenterPoint(), segment.getInternalPerimeter());
 		return functions.getTheta();
 	}
 

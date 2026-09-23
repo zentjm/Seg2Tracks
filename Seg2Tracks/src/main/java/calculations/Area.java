@@ -36,7 +36,7 @@ public class Area extends SegmentCalculation {
 	 */
 	@Override //TODO: move calculations here
 	public double calculate() {
-		double answer = (double) GeometricCalculations.getAreaByRoi(segments[0].getInternalPerimeter()).length;
+		double answer = (double) GeometricCalculations.getAreaByRoi(segment.getInternalPerimeter()).length;
 		//System.out.println("Answer is: " + answer);
 		return answer;
 	}

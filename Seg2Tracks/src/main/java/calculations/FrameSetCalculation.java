@@ -11,16 +11,14 @@ public abstract class FrameSetCalculation extends Data {
 
 	String name;
 	boolean statistic;
-	double solution;
-	// Sentinel value to detect uncomputed calculations
-	final double flag = Double.MIN_VALUE;
+	private double solution;
+	private boolean computed = false;
 	FrameSet frameSet;
 
 	/**
-	 * Constructor initializing the calculation with cached solution sentinel.
+	 * Constructor — caches name and statistic flag.
 	 */
 	public FrameSetCalculation() {
-		solution = flag;
 		name = getName();
 		statistic = isStatistic();
 	}
@@ -42,8 +40,9 @@ public abstract class FrameSetCalculation extends Data {
 	 * @return calculated value, cached if previously computed
 	 */
 	public double get() {
-		if (solution != flag) return solution;
+		if (computed) return solution;
 		solution = calculate();
+		computed = true;
 		return solution;
 	}
 
@@ -57,11 +56,15 @@ public abstract class FrameSetCalculation extends Data {
 	}
 
 	/**
-	 * Indicates whether this is a statistic or a basic calculation.
+	 * Whether this calculation's value should be included in DataSet-level aggregate
+	 * statistics when that tier is implemented.  Returns {@code true} by default;
+	 * override to return {@code false} to exclude.
 	 *
-	 * @return true if statistic, false if basic calculation
+	 * @return true if this calculation participates in aggregate statistics
 	 */
-	public abstract boolean isStatistic();
+	public boolean isStatistic() {
+		return true;
+	}
 
 	/**
 	 * Returns the name of this calculation.

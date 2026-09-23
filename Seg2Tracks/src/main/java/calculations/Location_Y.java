@@ -34,6 +34,6 @@ public class Location_Y extends SegmentCalculation {
 	 */
 	@Override //TODO: move calculations here
 	public double calculate() {
-		return (double) segments[0].getCenterPoint().y;
+		return (double) segment.getCenterPoint().y;
 	}
 }

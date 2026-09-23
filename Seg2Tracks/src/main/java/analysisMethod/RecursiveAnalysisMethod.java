@@ -32,33 +32,33 @@ import ij.plugin.frame.RoiManager;
  *
  * Sibling to {@link OperationMethod}: where OperationMethod handles flat
  * DataSet analysis, RecursiveAnalysisMethod handles the parent–child hierarchy
- * produced by recursive segmentation (e.g. voids inside macrophages).
+ * produced by recursive segmentation (subsegments inside parent segments).
  *
  * <h3>Calculation tiers</h3>
  * <pre>
- *   CHILD VOID TIERS
- *     segmentCalculations()          — per void segment (area, circularity, …)
- *     childLinkSetCalculations()     — per void track aggregated across frames
- *     childLinkSetStatistics()       — statistics over void segments per track
- *     childFrameSetCalculations()    — child void population per timepoint
- *     childFrameSetStatistics()      — statistics over child void segments per frame
+ *   CHILD SUBSEGMENT TIERS
+ *     segmentCalculations()          — per subsegment (area, circularity, …)
+ *     childLinkSetCalculations()     — per subsegment track aggregated across frames
+ *     childLinkSetStatistics()       — statistics over subsegments per track
+ *     childFrameSetCalculations()    — subsegment population per timepoint
+ *     childFrameSetStatistics()      — statistics over subsegments per frame
  *
- *   PARENT CELL TIERS
- *     parentSegmentCalculations()    — per parent-cell segment (for frame-level stats)
- *     parentLinkSetCalculations()    — aggregate per parent cell with child context
- *     parentFrameSetCalculations()   — parent cell population per timepoint
- *     parentFrameSetStatistics()     — statistics over parent-cell segments per frame
+ *   PARENT SEGMENT TIERS
+ *     parentSegmentCalculations()    — per parent segment (for frame-level stats)
+ *     parentLinkSetCalculations()    — aggregate per parent segment with child context
+ *     parentFrameSetCalculations()   — parent segment population per timepoint
+ *     parentFrameSetStatistics()     — statistics over parent segments per frame
  * </pre>
  *
  * <h3>Output format</h3>
  * Wide format (one row per entity, one column per calculation/statistic),
  * optimised for Excel pivot chart integration.  Five sheets are produced:
  * <ol>
- *   <li>Void Segment Data      — one row per (child void × frame)
- *   <li>Void Track Data        — one row per child void track
- *   <li>Parent Cell Aggregation — one row per parent cell
- *   <li>Child Frame Data       — one row per timepoint (child void population)
- *   <li>Parent Frame Data      — one row per timepoint (parent cell population)
+ *   <li>Subsegment Data         — one row per (subsegment × frame)
+ *   <li>Subsegment Track Data   — one row per subsegment track
+ *   <li>Segment Aggregation     — one row per parent segment
+ *   <li>Subsegment Frame Data   — one row per timepoint (subsegment population)
+ *   <li>Segment Frame Data      — one row per timepoint (parent segment population)
  * </ol>
  * Statistic columns use the pattern {@code StatName_CalcName} (e.g. Mean_Area).
  *
@@ -71,8 +71,8 @@ import ij.plugin.frame.RoiManager;
  * <h3>Hierarchy extensibility</h3>
  * The {@link #parentDataSet} field is populated from
  * {@link RecursiveDataSet#getParentDataSet()}, exposing the ancestry chain for
- * deeper hierarchies.  Cross-parent (inter-cell) analysis requiring simultaneous
- * access to the full parent population is handled by the separate
+ * deeper hierarchies.  Cross-parent analysis requiring simultaneous access to the
+ * full parent population is handled by the separate
  * {@link CrossRecursiveAnalysisMethod} stub.
  *
  * <h3>TODO</h3>
@@ -84,7 +84,7 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 
 	// ── Data sources ──────────────────────────────────────────────────────────
 
-	/** The recursively-generated child DataSet (voids inside parent cells). */
+	/** The recursively-generated child DataSet (subsegments inside parent segments). */
 	RecursiveDataSet recursiveDataSet;
 
 	/**
@@ -120,7 +120,7 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	/**
 	 * Configured {@link RecursiveLinkSetCalculation} instances keyed by parent
 	 * LinkSet.  Populated in {@link #setCalculations()}, consumed in
-	 * {@link #retrieveCalculations()}.  LinkedHashMap preserves parent cell
+	 * {@link #retrieveCalculations()}.  LinkedHashMap preserves parent segment
 	 * insertion order for predictable output row ordering.
 	 */
 	Map<LinkSet, RecursiveLinkSetCalculation[]> parentCalcMap = new LinkedHashMap<>();
@@ -133,7 +133,7 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	 * Initializes this analysis with a fresh workbook.
 	 *
 	 * @param target           the full-image ImagePlus (used for intensity calculations and overlay)
-	 * @param recursiveDataSet the RecursiveDataSet containing all child void LinkSets
+	 * @param recursiveDataSet the RecursiveDataSet containing all child subsegment LinkSets
 	 * @param progressBar      UI progress indicator
 	 */
 	public void initialize(ImagePlus target, RecursiveDataSet recursiveDataSet,
@@ -151,7 +151,7 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	 * Initializes this analysis appending results to an existing workbook.
 	 *
 	 * @param target           the full-image ImagePlus
-	 * @param recursiveDataSet the RecursiveDataSet containing all child void LinkSets
+	 * @param recursiveDataSet the RecursiveDataSet containing all child subsegment LinkSets
 	 * @param progressBar      UI progress indicator
 	 * @param workbook         existing ResultWorkbook to append sheets to
 	 */
@@ -159,6 +159,45 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	                       JProgressBar progressBar, ResultWorkbook workbook) {
 		initialize(target, recursiveDataSet, progressBar);
 		this.workbook = workbook;
+	}
+
+	// ── Bridge overrides for the standard AnalysisMethod interface ────────────
+	// AnalysisModel.runIt() calls initialize(ImagePlus, DataSet[], JProgressBar).
+	// These overrides extract dataSets[0] as a RecursiveDataSet and delegate.
+
+	/**
+	 * Bridge override: called by {@link gui.AnalysisModel} when a recursive
+	 * analysis method is loaded via {@code seg2tracks.config}.
+	 * Extracts the first element of {@code dataSets} as a {@link RecursiveDataSet}
+	 * and delegates to the typed {@link #initialize(ImagePlus, RecursiveDataSet, JProgressBar)}.
+	 *
+	 * @throws IllegalArgumentException if {@code dataSets} is null/empty or if
+	 *                                  {@code dataSets[0]} is not a RecursiveDataSet
+	 */
+	@Override
+	public void initialize(ImagePlus target, DataSet[] dataSets, JProgressBar progressBar) {
+		if (dataSets == null || dataSets.length == 0 || !(dataSets[0] instanceof RecursiveDataSet)) {
+			throw new IllegalArgumentException(
+				getClass().getSimpleName() + " requires a RecursiveDataSet as its first input channel.");
+		}
+		initialize(target, (RecursiveDataSet) dataSets[0], progressBar);
+	}
+
+	/**
+	 * Bridge override: workbook-append variant.
+	 * Extracts {@code dataSets[0]} as a {@link RecursiveDataSet} and delegates to
+	 * {@link #initialize(ImagePlus, RecursiveDataSet, JProgressBar, ResultWorkbook)}.
+	 *
+	 * @throws IllegalArgumentException if {@code dataSets[0]} is not a RecursiveDataSet
+	 */
+	@Override
+	public void initialize(ImagePlus target, DataSet[] dataSets, JProgressBar progressBar,
+	                       ResultWorkbook workbook) {
+		if (dataSets == null || dataSets.length == 0 || !(dataSets[0] instanceof RecursiveDataSet)) {
+			throw new IllegalArgumentException(
+				getClass().getSimpleName() + " requires a RecursiveDataSet as its first input channel.");
+		}
+		initialize(target, (RecursiveDataSet) dataSets[0], progressBar, workbook);
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -205,7 +244,9 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	// ── Workbook pipeline ─────────────────────────────────────────────────────
 
 	/**
-	 * Creates five wide-format sheets in the workbook.
+	 * Creates five wide-format sheets in the workbook:
+	 * Subsegment Data, Subsegment Track Data, Segment Aggregation,
+	 * Subsegment Frame Data, and Segment Frame Data.
 	 * Column headers are built dynamically from the calculation name arrays so
 	 * adding a new calculation automatically extends the relevant sheet.
 	 *
@@ -225,35 +266,35 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 		parentFSCalcNames  = names(parentFrameSetCalculations());
 		parentFSStatNames  = names(parentFrameSetStatistics());
 
-		// 1. Void Segment Data — one row per (child void track × frame)
-		voidSegmentSheet = workbook.addSheet("Void Segment Data",
+		// 1. Subsegment Data — one row per (subsegment track × frame)
+		voidSegmentSheet = workbook.addSheet("Subsegment Data",
 			wideHeaders(
-				new String[]{"DataSet", "Method", "Parent Cell", "Child Void", "Frame"},
+				new String[]{"DataSet", "Method", "Segment", "Subsegment", "Frame"},
 				segmentCalcNames));
 
-		// 2. Void Track Data — one row per child void track
+		// 2. Subsegment Track Data — one row per subsegment track
 		//    Stat columns: StatName_CalcName (e.g. Mean_Area)
-		childVoidTrackSheet = workbook.addSheet("Void Track Data",
+		childVoidTrackSheet = workbook.addSheet("Subsegment Track Data",
 			wideHeaders(
-				new String[]{"DataSet", "Method", "Parent Cell", "Child Void"},
+				new String[]{"DataSet", "Method", "Segment", "Subsegment"},
 				childLSCalcNames,
 				statCalcHeaders(childLSStatNames, segmentCalcNames)));
 
-		// 3. Parent Cell Aggregation — one row per parent cell
-		parentCellSheet = workbook.addSheet("Parent Cell Aggregation",
+		// 3. Segment Aggregation — one row per parent segment
+		parentCellSheet = workbook.addSheet("Segment Aggregation",
 			wideHeaders(
-				new String[]{"DataSet", "Method", "Parent Cell"},
+				new String[]{"DataSet", "Method", "Segment"},
 				parentLSCalcNames));
 
-		// 4. Child Frame Data — one row per timepoint (child void population)
-		childFrameSheet = workbook.addSheet("Child Frame Data",
+		// 4. Subsegment Frame Data — one row per timepoint (subsegment population)
+		childFrameSheet = workbook.addSheet("Subsegment Frame Data",
 			wideHeaders(
 				new String[]{"DataSet", "Method", "Frame"},
 				childFSCalcNames,
 				statCalcHeaders(childFSStatNames, segmentCalcNames)));
 
-		// 5. Parent Frame Data — one row per timepoint (parent cell population)
-		parentFrameSheet = workbook.addSheet("Parent Frame Data",
+		// 5. Segment Frame Data — one row per timepoint (parent segment population)
+		parentFrameSheet = workbook.addSheet("Segment Frame Data",
 			wideHeaders(
 				new String[]{"DataSet", "Method", "Frame"},
 				parentFSCalcNames,
@@ -263,7 +304,7 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	/**
 	 * Configures all calculations on their respective data objects.
 	 *
-	 * Child void segment and LinkSet calculations are stored directly on the
+	 * Child subsegment and LinkSet calculations are stored directly on the
 	 * Segment / LinkSet objects (mirroring {@link OperationMethod}).
 	 * Parent-level {@link RecursiveLinkSetCalculation} instances are stored in
 	 * {@link #parentCalcMap} keyed by parent LinkSet because the parent
@@ -275,8 +316,8 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	@Override
 	public void setCalculations() {
 
-		// ── Child void segment and LinkSet tiers ──────────────────────────────
-		progressBar.setString("Setting void calculations");
+		// ── Child subsegment and LinkSet tiers ───────────────────────────────
+		progressBar.setString("Setting subsegment calculations");
 		progressBar.setMinimum(0);
 		progressBar.setMaximum(recursiveDataSet.getLinkSetList().size());
 		int progress = 0;
@@ -289,7 +330,7 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 				if (calcs != null) {
 					for (SegmentCalculation c : calcs) {
 						c.setTargetStackSlice(stack, seg.getFrame() + 1);
-						c.setSegments(seg);
+						c.setSegment(seg);
 						seg.setCalculation(c);
 					}
 				}
@@ -317,7 +358,7 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 		}
 
 		// ── Parent segment calculations (needed for parent frame-level stats) ─
-		// Fresh instances per segment; stored on the parent cells' Segments so
+		// Fresh instances per segment; stored on the parent segments' Segments so
 		// parentFrameSetStatistics() can aggregate over them via the FrameSet.
 		for (LinkSet parentLS : parentDataSet.getLinkSetList()) {
 			for (Segment seg : parentLS) {
@@ -325,7 +366,7 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 				if (calcs != null) {
 					for (SegmentCalculation c : calcs) {
 						c.setTargetStackSlice(stack, seg.getFrame() + 1);
-						c.setSegments(seg);
+						c.setSegment(seg);
 						seg.setCalculation(c);
 					}
 				}
@@ -333,7 +374,7 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 		}
 
 		// ── Parent LinkSet aggregation (RecursiveLinkSetCalculation) ──────────
-		// Fresh instances per parent cell; stored in parentCalcMap.
+		// Fresh instances per parent segment; stored in parentCalcMap.
 		parentCalcMap.clear();
 		for (LinkSet parentLS : parentDataSet.getLinkSetList()) {
 			List<LinkSet> children = recursiveDataSet.getChildLinkSets(parentLS);
@@ -396,8 +437,8 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	@Override
 	public void retrieveCalculations() {
 
-		// ── Sheet 1: Void Segment Data ────────────────────────────────────────
-		progressBar.setString("Retrieving void segment data");
+		// ── Sheet 1: Subsegment Data ──────────────────────────────────────────
+		progressBar.setString("Retrieving subsegment data");
 		progressBar.setMinimum(0);
 		progressBar.setMaximum(recursiveDataSet.getLinkSetList().size());
 		int progress = 0;
@@ -421,8 +462,8 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 			progressBar.setValue(++progress);
 		}
 
-		// ── Sheet 2: Void Track Data ──────────────────────────────────────────
-		progressBar.setString("Retrieving void track data");
+		// ── Sheet 2: Subsegment Track Data ───────────────────────────────────
+		progressBar.setString("Retrieving subsegment track data");
 		progressBar.setValue(0); progress = 0;
 
 		for (LinkSet childLS : recursiveDataSet.getLinkSetList()) {
@@ -450,8 +491,8 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 			progressBar.setValue(++progress);
 		}
 
-		// ── Sheet 3: Parent Cell Aggregation ──────────────────────────────────
-		progressBar.setString("Retrieving parent cell aggregation data");
+		// ── Sheet 3: Segment Aggregation ─────────────────────────────────────
+		progressBar.setString("Retrieving segment aggregation data");
 		progressBar.setMinimum(0);
 		progressBar.setMaximum(parentDataSet.getLinkSetList().size());
 		progressBar.setValue(0); progress = 0;
@@ -470,8 +511,8 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 			progressBar.setValue(++progress);
 		}
 
-		// ── Sheet 4: Child Frame Data ─────────────────────────────────────────
-		progressBar.setString("Retrieving child frame data");
+		// ── Sheet 4: Subsegment Frame Data ───────────────────────────────────
+		progressBar.setString("Retrieving subsegment frame data");
 		progressBar.setMinimum(0);
 		progressBar.setMaximum(recursiveDataSet.getFrameSetList().length);
 		progressBar.setValue(0); progress = 0;
@@ -498,8 +539,8 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 			progressBar.setValue(++progress);
 		}
 
-		// ── Sheet 5: Parent Frame Data ────────────────────────────────────────
-		progressBar.setString("Retrieving parent frame data");
+		// ── Sheet 5: Segment Frame Data ───────────────────────────────────────
+		progressBar.setString("Retrieving segment frame data");
 		progressBar.setMinimum(0);
 		progressBar.setMaximum(parentDataSet.getFrameSetList().length);
 		progressBar.setValue(0); progress = 0;
@@ -530,14 +571,14 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	// ── Overlay ───────────────────────────────────────────────────────────────
 
 	/**
-	 * Draws parent cell outlines then child void outlines on the full-image overlay.
-	 * Parent cells are drawn first (behind) in {@link #getParentColor(LinkSet)}.
-	 * Child voids are drawn on top in {@link #getChildColor(LinkSet, LinkSet)}.
+	 * Draws parent segment outlines then subsegment outlines on the full-image overlay.
+	 * Parent segments are drawn first (behind) in {@link #getParentColor(LinkSet)}.
+	 * Subsegments are drawn on top in {@link #getChildColor(LinkSet, LinkSet)}.
 	 */
 	@Override
 	void dataSetToOverlay(Overlay overlay, RoiManager manager) {
-		// ── Parent cell outlines (drawn first, behind child voids) ────────────
-		progressBar.setString("Generating parent cell overlay");
+		// ── Parent segment outlines (drawn first, behind subsegments) ────────
+		progressBar.setString("Generating segment overlay");
 		for (LinkSet parentLS : parentDataSet.getLinkSetList()) {
 			Color pc = getParentColor(parentLS);
 			for (Segment seg : parentLS) {
@@ -546,13 +587,13 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 				roi.setStrokeColor(pc);
 				roi.setStrokeWidth(2);
 				roi.setPosition(seg.getFrame() + 1);
-				overlay.add(roi, "Parent:" + parentLS.getDisplayName());
+				overlay.add(roi, "Segment:" + parentLS.getDisplayName());
 				manager.add(target, roi, seg.getFrame() + 1);
 			}
 		}
 
-		// ── Child void outlines (drawn on top of parent outlines) ─────────────
-		progressBar.setString("Generating child void overlay");
+		// ── Subsegment outlines (drawn on top of parent outlines) ─────────────
+		progressBar.setString("Generating subsegment overlay");
 		for (LinkSet childLS : recursiveDataSet.getLinkSetList()) {
 			LinkSet parentLS = recursiveDataSet.getParentLinkSet(childLS);
 			Color cc = getChildColor(childLS, parentLS);
@@ -563,7 +604,7 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 				roi.setStrokeWidth(1);
 				roi.setPosition(seg.getFrame() + 1);
 				String parentLabel = (parentLS != null) ? parentLS.getDisplayName() : "?";
-				overlay.add(roi, "Void:" + childLS.getDisplayName() + " in " + parentLabel);
+				overlay.add(roi, "Subsegment:" + childLS.getDisplayName() + " in " + parentLabel);
 				manager.add(target, roi, seg.getFrame() + 1);
 			}
 		}
@@ -574,17 +615,17 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	// ═══════════════════════════════════════════════════════════════════════════
 
 	/**
-	 * Returns the stroke color for all overlay ROIs belonging to a parent cell.
+	 * Returns the stroke color for all overlay ROIs belonging to a parent segment.
 	 * Concrete subclasses choose the color model: fixed palette, stored on
 	 * the LinkSet, random assignment, etc.
 	 *
-	 * @param parent the parent cell LinkSet
-	 * @return Color for all segments of this parent cell
+	 * @param parent the parent segment LinkSet
+	 * @return Color for all segments of this parent segment
 	 */
 	protected abstract Color getParentColor(LinkSet parent);
 
 	/**
-	 * Returns the stroke color for all overlay ROIs belonging to a child void.
+	 * Returns the stroke color for all overlay ROIs belonging to a child subsegment.
 	 *
 	 * Default: hue-inherited from the parent color — same hue, reduced saturation,
 	 * increased brightness — so parent and child are visually related but distinct.
@@ -592,9 +633,9 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	 * Override to use a different relationship model (complementary color,
 	 * fixed offset, fully independent colors, etc.).
 	 *
-	 * @param child  the child void LinkSet
-	 * @param parent the parent cell that contains this void (may be null)
-	 * @return Color for all segments of this child void
+	 * @param child  the child subsegment LinkSet
+	 * @param parent the parent segment that contains this subsegment (may be null)
+	 * @return Color for all segments of this child subsegment
 	 */
 	protected Color getChildColor(LinkSet child, LinkSet parent) {
 		if (parent == null) return getColor(); // fallback: random color from AnalysisMethod
@@ -610,22 +651,22 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	// Abstract calculation tiers — implemented by concrete subclasses
 	// ═══════════════════════════════════════════════════════════════════════════
 
-	// ── Child void tiers ──────────────────────────────────────────────────────
+	// ── Child subsegment tiers ────────────────────────────────────────────────
 
 	/**
-	 * Per-void-segment calculations (area, location, circularity, intensity, …).
+	 * Per-subsegment calculations (area, location, circularity, intensity, …).
 	 * Also used as the basis for {@link #childLinkSetStatistics()} and
 	 * {@link #childFrameSetStatistics()} column headers.
-	 * Results appear as columns in the "Void Segment Data" sheet.
+	 * Results appear as columns in the "Subsegment Data" sheet.
 	 *
 	 * @return array of SegmentCalculation objects, or null/empty if not needed
 	 */
 	protected abstract SegmentCalculation[] segmentCalculations();
 
 	/**
-	 * Per-void-track calculations aggregated across all frames of a track
+	 * Per-subsegment-track calculations aggregated across all frames of a track
 	 * (e.g. track length in frames, first/last frame).
-	 * Results appear as columns in the "Void Track Data" sheet.
+	 * Results appear as columns in the "Subsegment Track Data" sheet.
 	 *
 	 * @return array of LinkSetCalculation objects, or null/empty if not needed
 	 */
@@ -633,8 +674,8 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 
 	/**
 	 * Statistics aggregating {@link #segmentCalculations()} values across all
-	 * frames of each void track (e.g. mean area over track lifetime).
-	 * Each statistic × each segment calculation = one column in "Void Track Data".
+	 * frames of each subsegment track (e.g. mean area over track lifetime).
+	 * Each statistic × each segment calculation = one column in "Subsegment Track Data".
 	 * Column header pattern: {@code StatName_CalcName} (e.g. Mean_Area).
 	 *
 	 * @return array of LinkSetStatistic objects, or null/empty if not needed
@@ -642,27 +683,27 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	protected abstract LinkSetStatistic[] childLinkSetStatistics();
 
 	/**
-	 * Frame-level calculations over the child void population at each timepoint.
-	 * Results appear as columns in the "Child Frame Data" sheet.
+	 * Frame-level calculations over the subsegment population at each timepoint.
+	 * Results appear as columns in the "Subsegment Frame Data" sheet.
 	 *
 	 * @return array of FrameSetCalculation objects, or null/empty if not needed
 	 */
 	protected abstract FrameSetCalculation[] childFrameSetCalculations();
 
 	/**
-	 * Statistics aggregating {@link #segmentCalculations()} across void segments
-	 * within a single frame (e.g. mean void area per frame).
-	 * Each statistic × each segment calculation = one column in "Child Frame Data".
+	 * Statistics aggregating {@link #segmentCalculations()} across subsegments
+	 * within a single frame (e.g. mean subsegment area per frame).
+	 * Each statistic × each segment calculation = one column in "Subsegment Frame Data".
 	 *
 	 * @return array of FrameSetStatistic objects, or null/empty if not needed
 	 */
 	protected abstract FrameSetStatistic[] childFrameSetStatistics();
 
-	// ── Parent cell tiers ─────────────────────────────────────────────────────
+	// ── Parent segment tiers ──────────────────────────────────────────────────
 
 	/**
-	 * Per-parent-cell-segment calculations (e.g. parent cell area, circularity).
-	 * These are stored on parent cell Segment objects and used as the basis for
+	 * Per-parent-segment calculations (e.g. parent segment area, circularity).
+	 * These are stored on parent segment Segment objects and used as the basis for
 	 * {@link #parentFrameSetStatistics()} column headers.  They are not output
 	 * directly as a separate sheet.
 	 *
@@ -671,30 +712,30 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	protected abstract SegmentCalculation[] parentSegmentCalculations();
 
 	/**
-	 * Aggregate calculations per parent cell using both the parent cell and its
-	 * child void context (e.g. void count, total void area, void area fraction).
+	 * Aggregate calculations per parent segment using both the parent segment and its
+	 * child subsegment context (e.g. subsegment count, total subsegment area, area fraction).
 	 * These use {@link RecursiveLinkSetCalculation} rather than
 	 * {@link LinkSetCalculation} because they require child context that a
 	 * standard LinkSetCalculation cannot express.
-	 * Results appear as columns in the "Parent Cell Aggregation" sheet.
+	 * Results appear as columns in the "Segment Aggregation" sheet.
 	 *
 	 * @return array of RecursiveLinkSetCalculation objects, or null/empty if not needed
 	 */
 	protected abstract RecursiveLinkSetCalculation[] parentLinkSetCalculations();
 
 	/**
-	 * Frame-level calculations over the parent cell population at each timepoint
-	 * (e.g. total cell count per frame, population confluency).
-	 * Results appear as columns in the "Parent Frame Data" sheet.
+	 * Frame-level calculations over the parent segment population at each timepoint
+	 * (e.g. total segment count per frame, population confluency).
+	 * Results appear as columns in the "Segment Frame Data" sheet.
 	 *
 	 * @return array of FrameSetCalculation objects, or null/empty if not needed
 	 */
 	protected abstract FrameSetCalculation[] parentFrameSetCalculations();
 
 	/**
-	 * Statistics aggregating {@link #parentSegmentCalculations()} across parent-cell
-	 * segments within a single frame (e.g. mean parent cell area per frame).
-	 * Each statistic × each parent segment calculation = one column in "Parent Frame Data".
+	 * Statistics aggregating {@link #parentSegmentCalculations()} across parent
+	 * segments within a single frame (e.g. mean parent segment area per frame).
+	 * Each statistic × each parent segment calculation = one column in "Segment Frame Data".
 	 *
 	 * @return array of FrameSetStatistic objects, or null/empty if not needed
 	 */
@@ -703,18 +744,18 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	// ── Overlay ROI extraction ────────────────────────────────────────────────
 
 	/**
-	 * Extracts the overlay ROI for a single parent cell segment.
+	 * Extracts the overlay ROI for a single parent segment.
 	 * Typically returns a PolygonRoi from the segment's external or internal perimeter.
 	 *
-	 * @param segment a segment from a parent cell LinkSet
+	 * @param segment a segment from a parent segment LinkSet
 	 * @return Roi for overlay display, or null to skip this segment
 	 */
 	protected abstract Roi getParentOverlayRoi(Segment segment);
 
 	/**
-	 * Extracts the overlay ROI for a single child void segment.
+	 * Extracts the overlay ROI for a single child subsegment.
 	 *
-	 * @param segment a segment from a child void LinkSet
+	 * @param segment a segment from a child subsegment LinkSet
 	 * @return Roi for overlay display, or null to skip this segment
 	 */
 	protected abstract Roi getChildOverlayRoi(Segment segment);

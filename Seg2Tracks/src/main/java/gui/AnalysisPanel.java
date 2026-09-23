@@ -1,29 +1,25 @@
 package gui;
 
 import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Insets;
+import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.ItemEvent;
-import java.awt.event.ItemListener;
-import java.io.File;
-import java.io.FilenameFilter;
 import java.util.ArrayList;
 import java.util.Observable;
 import java.util.Observer;
-import java.util.prefs.Preferences;
 
-import javax.swing.BoxLayout;
 import javax.swing.JButton;
-import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
+import javax.swing.SwingUtilities;
 
 import util.FileSelectionPanel;
 import util.FileType;
@@ -32,311 +28,273 @@ import util.FileType;
  * View component for the analysis panel. Displays UI controls for selecting analysis methods,
  * specifying target files, mapping input channels to datasets, and running analysis on segmented images.
  * Observes FileSelectionPanel changes and notifies the controller of user actions.
+ *
+ * Layout (column alignment is shared with the main GridBagLayout):
+ *   ROW 0  — panel title
+ *   ROW 1  — target file selection
+ *   ROW 2  — [Operation:] [method combo] [Settings]
+ *   ROW 3+ — one row per channel: [channel name] [dataset combo] (Run + status on the last row)
+ *
+ * Channel rows are rebuilt dynamically by updateChannelPanel() whenever the selected method
+ * changes or new datasets become available.  The parent window is re-packed automatically.
  */
 public class AnalysisPanel extends JPanel implements ActionListener, Observer {
-	
+
 	GridBagConstraints constraints = new GridBagConstraints();
 
 	AnalysisController controller;
 	AnalysisModel model;
 	int panelNumber;
-	
+
 	//Buttons
-	JButton buttonTarget; // = new JButton ("Target");
-	JButton buttonRun = new JButton ("Run");
-	JButton buttonSettings = new JButton ("Settings");
+	JButton buttonTarget;
+	JButton buttonRun = new JButton("Run");
+	JButton buttonSettings = new JButton("Settings");
 
-	//Automation Labels
-	JLabel internalSegmentationLabel = new JLabel("Internal Segmentation:");
-
-	//Holds name of channels for a loaded AnalysisMethod;
-	String[] channelLabels;
-	
-	//Create ComboBox Components
-	JComboBox <String[]> comboBoxAnalysisMethod;
-	ArrayList <JComboBox> comboBoxChannelSelections = new ArrayList<JComboBox>();
-	
-	//Holds names of dataSets
-	String[] channelList = {"empty"};
+	//Channel names supplied by the selected AnalysisMethod
 	String[] channelNames = {"empty"};
-	
-	//Create components for holding channels
-	int channelNumber; //TODO: register total number of channels that were loaded
-	JPanel channelPanel = new JPanel(new GridBagLayout());
-	
-	//Create Text Field Components
-	JTextField textFieldTarget; // = new JTextField("", 25);
-	JLabel targetMessage = new JLabel(" "); //TODO: italicize, create output
 
-	//Target selection components
+	//ComboBox components
+	JComboBox<String[]> comboBoxAnalysisMethod;
+	ArrayList<JComboBox> comboBoxChannelSelections = new ArrayList<JComboBox>();
+
+	//Names of available DataSets (populated when segmentation results are loaded)
+	String[] channelList = {"empty"};
+
+	//Target file selection
+	JTextField textFieldTarget;
+	JLabel targetMessage = new JLabel(" ");
 	FileSelectionPanel targetSelection;
 
-	//Loading Status Labels
+	//Status label (shown to the right of Run)
 	JLabel labelInfoRun = new JLabel(" ");
-	JLabel labelInfoGenerate = new JLabel(" ");
-	
-	
+
+	// Components added dynamically by updateChannelPanel(); tracked so they can be
+	// cleanly removed before each rebuild.
+	ArrayList<Component> channelRowComponents = new ArrayList<Component>();
+
+	// Main-grid row at which channel rows begin (rows 0-2 are static)
+	private static final int CHANNEL_START_ROW = 3;
+
 	public AnalysisPanel(AnalysisController controller, AnalysisModel model, int panelNumber) {
-		channelNumber = 1; //TODO modify for expansion and control by dynamic class
 		this.panelNumber = panelNumber;
 		this.controller = controller;
 		this.model = model;
+		setLayout(new GridBagLayout()); // must be set before createPanel adds components
 		initialize();
 		model.addObserver(this);
-		setLayout(new GridBagLayout());	
 		createPanel();
 	}
 
 	public void initialize() {
-		//Load analysis methods:
 		comboBoxAnalysisMethod = new JComboBox(controller.getAnalysisMethodNames());
-		
-		//Load previous selection:
 		comboBoxAnalysisMethod.setSelectedIndex(controller.getAnalysisMethodSelection());
-		
-		//Load Target file selector object
+
 		targetSelection = new FileSelectionPanel("Target", controller.getTargetFilePath(), this);
 		buttonTarget = targetSelection.getButton();
 		textFieldTarget = targetSelection.getField();
 		targetSelection.addObserver(this);
+
 		channelNames = controller.getChannels();
-		updateChannelPanel(); 
-		targetSelection.forceTimerUpdate(); //Ensures initial input text attempts to load a file
-		
-		//Load file-loaded settings
-    	updateAnalysisLoaded(0, 0);
-    	updateAnalysisLoaded(1, 0);
+		targetSelection.forceTimerUpdate();
+		updateAnalysisLoaded(0, 0);
+		// Channel rows are built at the end of createPanel() once the layout is active.
 	}
-	
+
 	public void createPanel() {
-		
+
 		//Constraint constants
 		constraints.anchor = GridBagConstraints.BASELINE_LEADING;
-	    constraints.fill = GridBagConstraints.HORIZONTAL;
-	    constraints.weightx = 1;
-	    constraints.weighty = 1;
-	    
-	    //Adjust fonts for the error message
-	    targetMessage.setFont(new Font(targetMessage.getFont().getName(), Font.ITALIC + Font.BOLD, targetMessage.getFont().getSize()));
-	    labelInfoRun.setFont(new Font(labelInfoRun.getFont().getName(), Font.ITALIC + Font.BOLD, labelInfoRun.getFont().getSize()));
-	    labelInfoGenerate.setFont(new Font(labelInfoGenerate.getFont().getName(), Font.ITALIC + Font.BOLD, labelInfoGenerate.getFont().getSize()));
-	    
-		//ROW 0
+		constraints.fill = GridBagConstraints.HORIZONTAL;
+		constraints.weightx = 1;
+		constraints.weighty = 1;
+		constraints.insets = new Insets(2, 4, 2, 4);
+
+		//Adjust fonts
+		targetMessage.setFont(new Font(targetMessage.getFont().getName(), Font.ITALIC + Font.BOLD, targetMessage.getFont().getSize()));
+		labelInfoRun.setFont(new Font(labelInfoRun.getFont().getName(), Font.ITALIC + Font.BOLD, labelInfoRun.getFont().getSize()));
+		labelInfoRun.setPreferredSize(new Dimension(200, labelInfoRun.getPreferredSize().height));
+
+		//ROW 0 — panel title (1-based index)
 		constraints.gridy = 0;
-		  
-		//Panel title
-        constraints.gridx = 0;
-        add(new JLabel("Analysis " + panelNumber), constraints);
-        
-    	//ROW 1
-        constraints.gridy = 1;
-     	
-        //Add target button
-        constraints.gridx = 0;
-     	add(buttonTarget, constraints);
-     	
-     	//Add target textField
-     	constraints.gridx = 1;
-     	constraints.gridwidth = 1;
-     	add(textFieldTarget, constraints);
-     	constraints.gridwidth = 1;
-     	
-     	//Add target response message
-     	constraints.gridx = 2;
-     	constraints.gridwidth = 5;
-     	add(targetMessage, constraints);
-     	constraints.gridwidth = 1;
-    	
-    	//ROW 2
-        constraints.gridy = 2;
-      
-        //add operation label
-        constraints.gridx = 0;
-        add(new JLabel("Operation:"), constraints);
-		
-        //Add operation comboBox
-    	constraints.gridx = 1;
+		constraints.gridx = 0;
+		add(new JLabel("Analysis " + (panelNumber + 1)), constraints);
+
+		//ROW 1 — target file
+		constraints.gridy = 1;
+		constraints.gridx = 0;
+		add(buttonTarget, constraints);
+		constraints.gridx = 1;
+		constraints.gridwidth = 4;
+		add(textFieldTarget, constraints);
 		constraints.gridwidth = 1;
+		constraints.gridx = 5;
+		constraints.gridwidth = 3;
+		add(targetMessage, constraints);
+		constraints.gridwidth = 1;
+
+		//ROW 2 — analysis method
+		//   col 0: "Operation:"  col 1-2: method combo  col 3: Settings
+		constraints.gridy = 2;
+		constraints.gridx = 0;
+		add(new JLabel("Operation:"), constraints);
+		constraints.gridx = 1;
+		constraints.gridwidth = 2;
 		add(comboBoxAnalysisMethod, constraints);
 		constraints.gridwidth = 1;
-        
-		//Add overlay checkbox
 		constraints.gridx = 3;
 		add(buttonSettings, constraints);
 		buttonSettings.setEnabled(false);
-		
-		//ROW 3
-        constraints.gridy = 3;
-		
-		//Add channel-selection panel
-		constraints.gridx = 1;
-		add(channelPanel, constraints);
-		
-		//Internal Segmentation Status 
-		constraints.gridx = 3;
-		add(buttonRun, constraints);
-		
-		//ROW 4
-        constraints.gridy = 4;
-		
-		//ROW 5
-		constraints.gridy = 5;
-		
-		//Internal Segmentation Status 
-		constraints.gridx = 2;
-		constraints.gridwidth = 5;
-		add(labelInfoRun, constraints);
-		constraints.gridwidth = 1;
-		
-		//OBSERVERS
+		buttonSettings.setToolTipText("Implementation pending soon");
+
+		//OBSERVERS — listeners on static components
 		comboBoxAnalysisMethod.addActionListener(this);
 		buttonSettings.addActionListener(this);
 		buttonRun.addActionListener(this);
+
+		//ROW 3+ — dynamic channel rows (built by updateChannelPanel)
+		//   col 0: channel name    col 1-2: dataset combo
+		//   col 3: Run (last row)  col 4+:  status (last row)
+		updateChannelPanel();
 	}
-	
+
+	/**
+	 * Rebuilds the per-channel dataset-selection rows in the main panel grid.
+	 * Called once during construction and again whenever the selected analysis method changes
+	 * or the set of available DataSets changes.  Automatically re-packs the parent window.
+	 *
+	 * Columns align directly with the "Operation:" row above:
+	 *   col 0 = channel name label  (same as "Operation:")
+	 *   col 1-2 = dataset combobox  (same as method combobox)
+	 *   col 3 = Run button          (same as Settings button)
+	 *   col 4+ = status label
+	 */
 	public void updateChannelPanel() {
-		
-		channelNames = controller.getChannels();
-		
-		channelPanel.removeAll();
+
+		// Ensure constraints are initialised (this can be called before createPanel finishes)
+		constraints.anchor = GridBagConstraints.BASELINE_LEADING;
+		constraints.fill = GridBagConstraints.HORIZONTAL;
+		constraints.insets = new Insets(2, 4, 2, 4);
+
+		// Remove previous channel rows, Run, and status from the main panel
+		for (Component c : channelRowComponents) remove(c);
+		channelRowComponents.clear();
 		comboBoxChannelSelections.clear();
-		
-		//System.out.println("Channel count is: " + channelNames.length);
-		
-		GridBagConstraints constraints = new GridBagConstraints();
-		int row = 0;
-		
+
+		channelNames = controller.getChannels();
+
+		// Build one combobox per channel input
 		for (int i = 0; i < channelNames.length; i++) {
-			comboBoxChannelSelections.add(new JComboBox(channelList));
-		}	
-		
-		for (int i = 0; i < channelNames.length; i++) {
-			
-			//ROW #
-			constraints.gridy = row + i;
-			
-			//Add the label
-			constraints.gridx = 0;
-			channelPanel.add(new JLabel(channelNames[i]), constraints); //TODO: Make label specific for the method, ex: "recursive channel", etc
-			
-			//Add the selection
-			constraints.gridx = 1;
-			channelPanel.add(comboBoxChannelSelections.get(i), constraints); //TODO: Modify for extensible channels
-			constraints.gridwidth = 1;
-			
-			//Adds an actionListener
-			comboBoxChannelSelections.get(i).addActionListener(this);
+			JComboBox combo = new JComboBox(channelList);
+			combo.addActionListener(this);
+			comboBoxChannelSelections.add(combo);
 		}
-		channelPanel.repaint();
-		channelPanel.revalidate();
+
+		// Add channel rows to the main panel grid
+		for (int i = 0; i < channelNames.length; i++) {
+			constraints.gridy = CHANNEL_START_ROW + i;
+
+			JLabel nameLabel = new JLabel(channelNames[i]);
+			constraints.gridx = 0;
+			add(nameLabel, constraints);
+			channelRowComponents.add(nameLabel);
+
+			constraints.gridx = 1;
+			constraints.gridwidth = 2;
+			add(comboBoxChannelSelections.get(i), constraints);
+			constraints.gridwidth = 1;
+			channelRowComponents.add(comboBoxChannelSelections.get(i));
+		}
+
+		// Run + status live on the last channel row
+		int lastRow = CHANNEL_START_ROW + Math.max(0, channelNames.length - 1);
+		constraints.gridy = lastRow;
+
+		constraints.gridx = 3;
+		add(buttonRun, constraints);
+		channelRowComponents.add(buttonRun);
+
+		constraints.gridx = 4;
+		constraints.gridwidth = 4;
+		add(labelInfoRun, constraints);
+		constraints.gridwidth = 1;
+		channelRowComponents.add(labelInfoRun);
+
+		revalidate();
+		repaint();
+
+		// Auto-resize the parent window to fit the updated row count
+		Window window = SwingUtilities.getWindowAncestor(this);
+		if (window != null) window.pack();
 	}
-		
+
 	@Override
 	public void actionPerformed(ActionEvent e) {
-		
+
 		if (e.getSource() == comboBoxAnalysisMethod) {
 			controller.setAnalysisMethodSelection(comboBoxAnalysisMethod.getSelectedIndex());
 			updateChannelPanel();
-			//System.out.println("Method selected is " + comboBoxAnalysisMethod.getSelectedIndex());
 		}
-		
-		//for (JComboBox comboBox: comboBoxChannelSelections) {
-		for (int i = 0; i < comboBoxChannelSelections.size(); i ++) {
+
+		for (int i = 0; i < comboBoxChannelSelections.size(); i++) {
 			if (e.getSource() == comboBoxChannelSelections.get(i)) {
-				controller.setChannelMethodSelection(i,
-						comboBoxChannelSelections.get(i).getSelectedIndex());
+				controller.setChannelMethodSelection(i, comboBoxChannelSelections.get(i).getSelectedIndex());
 			}
 		}
-		
+
 		if (e.getSource() == buttonSettings) {
-			//TODO: get selectedAnalysis DataSets
-			// {Name, link, 
-			
-			
 			controller.openAnalysisSettings();
 		}
-		
-		
+
 		if (e.getSource() == buttonRun) {
 			controller.runAnalysis();
 		}
 	}
-	
+
 	@Override
 	public void update(Observable obs, Object arg) {
 		if (obs instanceof FileSelectionPanel) {
 			updateTargetFile();
-		}	
+		}
 	}
 
 	public void updateTargetFile() {
 		if (targetSelection.getFileType() == FileType.NOT_DIRECTORY) {
 			targetMessage.setText("Not a valid directory");
 			targetMessage.setForeground(Color.RED);
-		}
-		
-		else if (targetSelection.getFileType() == FileType.NO_FILES) {
+		} else if (targetSelection.getFileType() == FileType.NO_FILES) {
 			targetMessage.setText("Directory has no files");
 			targetMessage.setForeground(Color.RED);
-		}
-		
-		else if (targetSelection.getFileType() == FileType.MULTIPLE_FILES) {
+		} else if (targetSelection.getFileType() == FileType.MULTIPLE_FILES) {
 			targetMessage.setText("Directory has more than one file");
 			targetMessage.setForeground(Color.RED);
-		}
-			
-		else if (targetSelection.getFileType() == FileType.SINGLE_FILE) {
+		} else if (targetSelection.getFileType() == FileType.SINGLE_FILE) {
 			targetMessage.setText("Target File Selected");
 			targetMessage.setForeground(Color.BLACK);
 			controller.setTargetFilePath(targetSelection.getFile().getAbsolutePath());
-		}	
-		
+		}
 		controller.setTargetField(textFieldTarget.getText());
 		repaint();
 		revalidate();
 	}
-	
-	//Setting 0: Unloaded run set.
-	//Setting 1: loaded run set. 
-	public void updateAnalysisLoaded(int label, int setting) { 
-		//Choose external or internal seg label.
-		JLabel labelInfo = null;
-		if (label == 0) labelInfo = labelInfoRun;
-		if (label == 1) labelInfo = labelInfoGenerate;
-		
-		if (setting == 0) { 
-			//TODO: Controller determines generate results. 
-			labelInfo.setText(" ");
 
-		}
-		//TODO: else disable generate
-		
-		if (setting == 1) labelInfo.setText("Overlay constructed and data analyzed");
-		if (setting == 2) labelInfo.setText("Overlay constructed");
-		if (setting == 3) labelInfo.setText("Data Analyzed");
-		if (setting == 4) labelInfo.setText("No data generated");
+	// Setting 0: unloaded. 1: overlay+data. 2: overlay only. 3: data only. 4: nothing generated.
+	// label param is reserved for future expansion; currently only labelInfoRun is shown.
+	public void updateAnalysisLoaded(int label, int setting) {
+		if (label != 0) return;
+
+		final Color LOADED_COLOR  = new Color(0, 150, 0);
+		final Color WARNING_COLOR = new Color(200, 140, 0);
+
+		if (setting == 0) { labelInfoRun.setText(" ");                                    labelInfoRun.setForeground(Color.BLACK);    }
+		if (setting == 1) { labelInfoRun.setText("Overlay constructed and data analyzed"); labelInfoRun.setForeground(LOADED_COLOR);  }
+		if (setting == 2) { labelInfoRun.setText("Overlay constructed");                  labelInfoRun.setForeground(LOADED_COLOR);  }
+		if (setting == 3) { labelInfoRun.setText("Data Analyzed");                        labelInfoRun.setForeground(LOADED_COLOR);  }
+		if (setting == 4) { labelInfoRun.setText("No data generated");                    labelInfoRun.setForeground(WARNING_COLOR); }
 	}
-	
-	
-	
-	
-	/*
-	public String getTargetPath() {
-	 return textFieldTarget.getText();
-	}
-	*/
-	
+
 	public void setChannelList(String[] channelList) {
 		this.channelList = channelList;
 		updateChannelPanel();
 	}
-
-	
-	
-
-
-
-	
 }
-
-

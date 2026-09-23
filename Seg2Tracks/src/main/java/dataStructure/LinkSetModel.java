@@ -9,4 +9,6 @@ import java.util.ArrayList;
  */
 public class LinkSetModel <SegmentModel> extends ArrayList<SegmentModel>  {
 
+	private static final long serialVersionUID = 1L;
+
 }

@@ -5,13 +5,13 @@ import java.util.List;
 import dataStructure.LinkSet;
 
 /**
- * Abstract base class for calculations that aggregate child void LinkSets
- * in the context of their parent cell LinkSet.
+ * Abstract base class for calculations that aggregate child subsegment LinkSets
+ * in the context of their parent segment LinkSet.
  *
  * Unlike {@link LinkSetCalculation}, which operates on a single LinkSet,
  * this class receives a (parent, children) pair so implementations can
- * compute metrics requiring both the parent cell and its void tracks —
- * e.g. void count, total void area, void area fraction of parent cell area.
+ * compute metrics requiring both the parent segment and its subsegment tracks —
+ * e.g. subsegment count, total subsegment area, subsegment area fraction of parent area.
  *
  * <h3>Usage pattern</h3>
  * <pre>
@@ -33,14 +33,14 @@ import dataStructure.LinkSet;
  */
 public abstract class RecursiveLinkSetCalculation extends Data {
 
-	/** The parent cell LinkSet from the primary segmentation. */
+	/** The parent segment LinkSet from the primary segmentation. */
 	protected LinkSet parentLinkSet;
 
-	/** All child void LinkSets found inside the parent cell. */
+	/** All child subsegment LinkSets found inside the parent segment. */
 	protected List<LinkSet> childLinkSets;
 
-	private static final double FLAG = Double.MIN_VALUE;
-	private double solution = FLAG;
+	private double solution;
+	private boolean computed = false;
 
 	public RecursiveLinkSetCalculation() {}
 
@@ -50,27 +50,30 @@ public abstract class RecursiveLinkSetCalculation extends Data {
 	 * {@link #calculate()}.
 	 *
 	 * Must be called once before {@link #get()}.  May be called again with a
-	 * new context (e.g. when the same instance is reused across parent cells —
-	 * though the recommended pattern is to create fresh instances per cell).
+	 * new context (e.g. when the same instance is reused across parent segments —
+	 * though the recommended pattern is to create fresh instances per segment).
 	 *
-	 * @param parent   the parent cell LinkSet from the primary segmentation
-	 * @param children all child void LinkSets found inside that parent (may be empty)
+	 * @param parent   the parent segment LinkSet from the primary segmentation
+	 * @param children all child subsegment LinkSets found inside that parent (may be empty)
 	 */
 	public void setContext(LinkSet parent, List<LinkSet> children) {
 		this.parentLinkSet = parent;
 		this.childLinkSets = children;
-		this.solution      = FLAG; // reset cache so calculate() is re-triggered
+		this.computed      = false; // reset cache so calculate() is re-triggered
 	}
 
 	/**
 	 * Returns the cached or freshly computed result.
 	 * {@link #setContext} must be called before the first invocation.
+	 * {@code Double.NaN} results are cached — a NaN answer will not trigger
+	 * recomputation on subsequent calls.
 	 *
 	 * @return computed metric value
 	 */
 	public double get() {
-		if (solution != FLAG) return solution;
+		if (computed) return solution;
 		solution = calculate();
+		computed = true;
 		return solution;
 	}
 

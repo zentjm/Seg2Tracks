@@ -42,7 +42,7 @@ public class FrameSetMean extends FrameSetStatistic{
 	public double calculate(String calcName) {
 		double total = 0;
 		for (SegmentModel seg: frameSet) {
-			total =+ seg.getCalculation(calcName);  // BUG: This is =+ (unary plus) not += (addition assignment)
+			total += seg.getCalculation(calcName);
 		}
 		return total/frameSet.size();
 	}

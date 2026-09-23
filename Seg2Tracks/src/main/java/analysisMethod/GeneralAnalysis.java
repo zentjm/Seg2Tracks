@@ -72,18 +72,28 @@ public class GeneralAnalysis extends OperationMethod {
 	 * Returns segment-level calculations for general analysis.
 	 * Includes centroid location, perimeter, area, intensity metrics, and circularity.
 	 *
+	 * Derived calculations ({@link MeanIntensity}, {@link Circularity}) receive
+	 * explicit references to the {@link Area}, {@link Perimeter}, and
+	 * {@link IntegratedIntensity} instances so they can call {@code .get()} directly
+	 * rather than looking up results by string key.  All instances in the returned
+	 * array share the same segment context via the normal {@code setSegment()} loop
+	 * in {@link analysisMethod.OperationMethod#setCalculations()}.
+	 *
 	 * @return array of core SegmentCalculation objects
 	 */
 	@Override
 	SegmentCalculation[] segmentCalculations() {
+		Area area = new Area();
+		Perimeter perimeter = new Perimeter();
+		IntegratedIntensity integratedIntensity = new IntegratedIntensity();
 		return new SegmentCalculation[] {
 			new Location_X(),
 			new Location_Y(),
-			new Perimeter(),
-			new Area(),
-			new IntegratedIntensity(),
-			new MeanIntensity(),
-			new Circularity(),
+			perimeter,
+			area,
+			integratedIntensity,
+			new MeanIntensity(area, integratedIntensity),
+			new Circularity(area, perimeter),
 		};
 	}
 

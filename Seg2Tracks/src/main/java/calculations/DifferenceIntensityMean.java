@@ -8,32 +8,41 @@ import ij.gui.ShapeRoi;
 
 /**
  * Computes mean intensity in the pericellular region surrounding a cell.
- * Calculated as: Difference Intensity / Exterior Area (normalized by region size).
- * Provides intensity measure independent of exterior region size variations.
+ * Calculated as Difference Intensity / Area — the pericellular total intensity
+ * normalised by the cell's internal area so results are comparable across
+ * cells of different sizes.
+ *
+ * <h3>Dependency injection</h3>
+ * {@code DifferenceIntensityMean} depends on {@link Area} and
+ * {@link DifferenceIntensity}.  The caller must pass the same instances that
+ * appear in {@code segmentCalculations()} so that {@link #setSegment} is
+ * applied consistently to all three.
  */
 public class DifferenceIntensityMean extends SegmentCalculation {
 
+	private final Area area;
+	private final DifferenceIntensity differenceIntensity;
+
 	/**
-	 * Indicates whether this metric should be used in LinkSet and FrameSet statistics.
-	 *
-	 * @return true (Difference Intensity Mean is a statistic)
+	 * @param area                the {@link Area} instance shared with the analysis method
+	 * @param differenceIntensity the {@link DifferenceIntensity} instance shared with the analysis method
 	 */
-	@Override
-	public boolean isStatistic() {
-		return true;
+	public DifferenceIntensityMean(Area area, DifferenceIntensity differenceIntensity) {
+		this.area                = area;
+		this.differenceIntensity = differenceIntensity;
 	}
 
 	/**
-	 * Calculate mean intensity by dividing total pericellular intensity by exterior area.
-	 * Depends on "Area" and "Difference Intensity" calculations being available.
+	 * Calculate mean pericellular intensity as Difference Intensity / Area.
+	 * Returns {@code Double.NaN} if area is zero (degenerate segment).
 	 *
-	 * @return mean pixel intensity in the pericellular region
+	 * @return mean pixel intensity in the pericellular annulus
 	 */
 	@Override
 	public double calculate() {
-		double area = segments[0].getCalculation("Area");
-		double integratedIntensity = segments[0].getCalculation("Difference Intensity");
-		return integratedIntensity/area;
+		double a = area.get();
+		if (a == 0) return Double.NaN;
+		return differenceIntensity.get() / a;
 	}
 
 	/**

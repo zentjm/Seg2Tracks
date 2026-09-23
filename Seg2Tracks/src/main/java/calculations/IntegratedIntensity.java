@@ -29,13 +29,11 @@ public class IntegratedIntensity extends SegmentCalculation {
 	 */
 	@Override
 	public double calculate() {
-		Point[] area = GeometricCalculations.getAreaByRoi
-				(segments[0].getInternalPerimeter());
+		Point[] area = GeometricCalculations.getAreaByRoi(segment.getInternalPerimeter());
 
 		int intensity = 0;
 		ImageProcessor processor = stack.getProcessor(slice);
 		for (Point pt: area) {
-			//intensity += (int) stack.getVoxel(pt.x, pt.y, slice);
 			intensity += (int) processor.get(pt.x, pt.y);
 		}
 		return intensity;

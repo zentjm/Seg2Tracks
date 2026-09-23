@@ -162,7 +162,6 @@ public abstract class AnalysisMethod {
 		target.setOverlay(overlay);
 		target.setTitle(methodName);
 		//System.out.println("Got the overlay");
-		if(target != null) System.out.println("Target is NOT null");
 		return target;
 	}
 

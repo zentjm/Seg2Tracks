@@ -270,10 +270,12 @@ public class LinkSet extends LinkSetModel<Segment> {
 	/**
 	 * Retrieves a cached cell-level calculation.
 	 * @param name name of calculation
-	 * @return calculated value
+	 * @return calculated value, or {@code Double.NaN} if unavailable
 	 */
 	public double getCalculation(String name) {
-		return calculationMap.get(name).get();
+		if (calculationMap == null) return Double.NaN;
+		LinkSetCalculation c = calculationMap.get(name);
+		return (c != null) ? c.get() : Double.NaN;
 	}
 
 	/**
@@ -289,10 +291,12 @@ public class LinkSet extends LinkSetModel<Segment> {
 	 * Retrieves a cached cell-level statistic.
 	 * @param statistic name of statistic
 	 * @param calculation name of underlying calculation
-	 * @return statistical result
+	 * @return statistical result, or {@code Double.NaN} if unavailable
 	 */
 	public double getStatistic(String statistic, String calculation) {
-		return statisticMap.get(statistic).get(calculation);
+		if (statisticMap == null) return Double.NaN;
+		LinkSetStatistic s = statisticMap.get(statistic);
+		return (s != null) ? s.get(calculation) : Double.NaN;
 	}
 	
 	

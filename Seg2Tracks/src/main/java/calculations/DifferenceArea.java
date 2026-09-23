@@ -26,8 +26,8 @@ public class DifferenceArea extends SegmentCalculation {
 	 */
 	@Override
 	public double calculate() {
-		return (double) GeometricCalculations.getAreaByRoi(segments[0].getExternalPerimeter()).length -
-				GeometricCalculations.getAreaByRoi(segments[0].getInternalPerimeter()).length;
+		return (double) GeometricCalculations.getAreaByRoi(segment.getExternalPerimeter()).length -
+				GeometricCalculations.getAreaByRoi(segment.getInternalPerimeter()).length;
 	}
 
 	/**

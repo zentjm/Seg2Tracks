@@ -32,8 +32,8 @@ public class DifferenceIntensity extends SegmentCalculation {
 	 */
 	@Override
 	public double calculate() {
-		ShapeRoi external = new ShapeRoi (GeometricCalculations.getPolygonRoi(segments[0].getExternalPerimeter()).getPolygon());
-		ShapeRoi internal = new ShapeRoi (GeometricCalculations.getPolygonRoi(segments[0].getInternalPerimeter()).getPolygon());
+		ShapeRoi external = new ShapeRoi(GeometricCalculations.getPolygonRoi(segment.getExternalPerimeter()).getPolygon());
+		ShapeRoi internal = new ShapeRoi(GeometricCalculations.getPolygonRoi(segment.getInternalPerimeter()).getPolygon());
 		Roi roi = external.not(internal);
 
 		Point[] points = roi.getContainedPoints();

@@ -7,23 +7,36 @@ import ij.ImageStack;
  * Abstract base class for calculations performed on individual segments (cells).
  * Computes morphological metrics (area, perimeter, shape) and intensity properties.
  * Caches results to avoid redundant computation across multiple statistic aggregations.
+ *
+ * <h3>Caching</h3>
+ * Results are cached via a {@code boolean computed} flag rather than a sentinel value,
+ * so {@code Double.NaN} results (e.g. from a missing perimeter) are cached correctly
+ * and never cause spurious recomputation.
+ *
+ * <h3>Statistics eligibility</h3>
+ * {@link #isStatistic()} controls whether this calculation's per-segment values are
+ * aggregated into {@link calculations.LinkSetStatistic} and
+ * {@link calculations.FrameSetStatistic} columns in the output workbook.
+ * The default is {@code true}; override to return {@code false} to exclude a
+ * calculation from those aggregate columns.
  */
 public abstract class SegmentCalculation extends Data {
 
-	boolean statistic; //TODO: determines if LinkSet values (mean, etc) will be performed on this one.
+	/** Whether this calculation's values are included in LinkSet/FrameSet statistics. */
+	boolean statistic;
 	String name;
-	double solution;
-	// Sentinel value to detect uncomputed calculations
-	double flag = Double.MIN_VALUE;
-	Segment[] segments;
-	ImageStack stack;
-	int slice;
+	private double solution;
+	private boolean computed = false;
+
+	/** The single segment this calculation operates on. Set via {@link #setSegment}. */
+	protected Segment segment;
+	protected ImageStack stack;
+	protected int slice;
 
 	/**
-	 * Constructor initializing the calculation with cached solution sentinel.
+	 * Constructor — caches name and statistic flag for later use.
 	 */
 	public SegmentCalculation() {
-		solution = flag;
 		name = getName();
 		statistic = isStatistic();
 	}
@@ -32,7 +45,7 @@ public abstract class SegmentCalculation extends Data {
 	 * Set the target image stack and slice (frame number) for intensity calculations.
 	 *
 	 * @param stack the ImageStack containing pixel intensity data
-	 * @param slice the frame/slice number to extract intensity from
+	 * @param slice the frame/slice number (1-based) to extract intensity from
 	 */
 	public void setTargetStackSlice(ImageStack stack, int slice) {
 		this.stack = stack;
@@ -40,48 +53,52 @@ public abstract class SegmentCalculation extends Data {
 	}
 
 	/**
-	 * Set the segment(s) that this calculation will operate on.
-	 * //TODO: this does not need to be an array
+	 * Set the segment this calculation will operate on.
 	 *
-	 * @param segments variable number of Segment objects to analyze
+	 * @param segment the Segment to analyze
 	 */
-	//TODO: this does not need to be an array
-	public void setSegments(Segment... segments) {
-		this.segments = segments;
+	public void setSegment(Segment segment) {
+		this.segment = segment;
 	}
 
 	/**
-	 * Get the cached or computed calculation result.
-	 * Computes the result if not already cached.
-	 * //TODO, another way to recuri
+	 * Returns the cached or freshly computed result.
+	 * {@code Double.NaN} results are cached normally — a NaN answer will not
+	 * trigger recomputation on subsequent calls.
 	 *
-	 * @return calculated value, cached if previously computed
+	 * @return computed (or cached) metric value
 	 */
 	public double get() {
-		if (solution != flag) return solution; //TODO, another way to recuri
+		if (computed) return solution;
 		solution = calculate();
+		computed = true;
 		return solution;
 	}
 
 	/**
 	 * Returns the DataType for this calculation.
 	 *
-	 * @return DataType.SEGMENT_CALCULATION
+	 * @return {@link DataType#SEGMENT_CALCULATION}
 	 */
 	public DataType getType() {
 		return DataType.SEGMENT_CALCULATION;
 	}
 
 	/**
-	 * Indicates whether this is a statistic or a basic calculation.
+	 * Whether this calculation's per-segment values should be included in
+	 * LinkSet-level and FrameSet-level aggregate statistics (mean, variance, etc.).
+	 * Returns {@code true} by default; override to return {@code false} to exclude.
 	 *
-	 * @return true if statistic, false if basic calculation
+	 * @return true if this calculation participates in aggregate statistics
 	 */
-	public abstract boolean isStatistic();
+	public boolean isStatistic() {
+		return true;
+	}
 
 	/**
-	 * Perform the calculation on the segment.
-	 * Must be implemented by subclasses.
+	 * Perform the calculation on {@link #segment}.
+	 * Called lazily by {@link #get()} and the result is cached until a new
+	 * segment is set.
 	 *
 	 * @return computed metric value
 	 */

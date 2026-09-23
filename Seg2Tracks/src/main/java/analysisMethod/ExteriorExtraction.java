@@ -131,11 +131,14 @@ public class ExteriorExtraction extends OperationMethod {
 	 */
 	@Override
 	SegmentCalculation[] segmentCalculations() {
+		Area area = new Area();
+		DifferenceIntensity differenceIntensity = new DifferenceIntensity();
 		return new SegmentCalculation[] {
 			new Perimeter(),
+			area,
 			new DifferenceArea(),
-			new DifferenceIntensity(),
-			new DifferenceIntensityMean()
+			differenceIntensity,
+			new DifferenceIntensityMean(area, differenceIntensity)
 		};
 	}
 
