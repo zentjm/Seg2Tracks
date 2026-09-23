@@ -35,7 +35,6 @@ import java.util.Observer;
 import java.util.Vector;
 
 import javax.swing.*;
-import javax.swing.JCheckBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -100,9 +99,6 @@ public class Seg2TracksPanel extends JFrame implements ItemListener, Observer {
 	
 	//JProgressBar
 	JProgressBar progressbar;
-	
-	//Create CheckBox Components
-	JCheckBox checkBoxExternalDependence = new JCheckBox("External Dependence"); //XXX: Only currently necessary for manual external analysis. 
 	
 	//Create Text Field Components
 	final JTextField textFieldInput = new JTextField("Insert Input File Location", 25);
@@ -169,11 +165,13 @@ public class Seg2TracksPanel extends JFrame implements ItemListener, Observer {
 	
 		//Adds panels;
 		masterPanel.add(headPanel);
-		
+
 		for (int i=0; i < operationControllerList.size(); i ++) {
-			masterPanel.add(operationControllerList.get(i).getPanel(), i + 1);
+			masterPanel.add(new JSeparator());
+			masterPanel.add(operationControllerList.get(i).getPanel());
 		}
-		
+		masterPanel.add(new JSeparator());
+
 		if (operationControllerList.size() < 2) floorPanel.allowPanelRemoval(false);
 		masterPanel.add(floorPanel);
 		add(masterPanel);
@@ -189,9 +187,11 @@ public class Seg2TracksPanel extends JFrame implements ItemListener, Observer {
 		
 		//Add analysis panels
 		for (int i=0; i < analysisControllerList.size(); i ++) {
+			masterPanel.add(new JSeparator());
 			masterPanel.add(analysisControllerList.get(i).getPanel());
 		}
-		
+		masterPanel.add(new JSeparator());
+
 		floorPanel.switchToAnalysis();
 		masterPanel.add(floorPanel);
 	
@@ -208,9 +208,11 @@ public class Seg2TracksPanel extends JFrame implements ItemListener, Observer {
 		
 		//Add operation panels
 		for (int i=0; i < operationControllerList.size(); i ++) {
-			masterPanel.add(operationControllerList.get(i).getPanel(), i + 1);
+			masterPanel.add(new JSeparator());
+			masterPanel.add(operationControllerList.get(i).getPanel());
 		}
-		
+		masterPanel.add(new JSeparator());
+
 		if (operationControllerList.size() < 2) floorPanel.allowPanelRemoval(false);
 		else floorPanel.allowPanelRemoval(true);
 		floorPanel.switchToOperation();

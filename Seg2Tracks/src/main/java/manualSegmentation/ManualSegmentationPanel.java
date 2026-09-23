@@ -21,6 +21,7 @@ import javax.swing.JPanel;
 
 
 import ij.IJ;
+import ij.Prefs;
 import ij.ImagePlus;
 import ij.ImageStack;
 import ij.gui.Overlay;
@@ -63,10 +64,25 @@ public class ManualSegmentationPanel extends JFrame implements ActionListener {
 	//Modification Menu
 	JButton buttonDeleteObject = new JButton("Delete");
 	JButton buttonMergeObject = new JButton("Merge");
+	JButton buttonRedrawSegment = new JButton("Redraw Segment");
 	JButton buttonSplitObject = new JButton("Split");
 	JButton buttonLinkObjects = new JButton("Link");
 	JButton buttonUnlinkObjects = new JButton("Unlink");
-	
+
+	// Split line confirmation sub-panel
+	JButton buttonConfirmSplit = new JButton("Apply Split");
+	JButton buttonCancelSplit  = new JButton("Cancel Split");
+
+	// Redraw-segment confirmation sub-panel
+	JButton buttonApplyRedraw  = new JButton("Apply Redraw");
+	JButton buttonCancelRedraw = new JButton("Cancel Redraw");
+
+	// Settings sub-panel
+	JButton buttonSettings     = new JButton("Settings");
+	JButton buttonRoiColor     = new JButton("ROI Color...");
+	JButton buttonDrawTool     = new JButton("Tool: Polygon");
+	JButton buttonSettingsBack = new JButton("Back");
+
 	//Editable
 	boolean canEdit;
 
@@ -115,15 +131,18 @@ public class ManualSegmentationPanel extends JFrame implements ActionListener {
 		//Modification Panel
 		buttonDeleteObject.addActionListener(this);
 		buttonMergeObject.addActionListener(this);
+		buttonRedrawSegment.addActionListener(this);
 		buttonSplitObject.addActionListener(this);
 		buttonLinkObjects.addActionListener(this);
 		buttonUnlinkObjects.addActionListener(this);
-		
-		
-		//XXX: Disabling unimplemented buttons
-		buttonSplitObject.setEnabled(false);
-		buttonLinkObjects.setEnabled(false);
-		buttonUnlinkObjects.setEnabled(false);
+		buttonConfirmSplit.addActionListener(this);
+		buttonCancelSplit .addActionListener(this);
+		buttonApplyRedraw .addActionListener(this);
+		buttonCancelRedraw.addActionListener(this);
+		buttonSettings    .addActionListener(this);
+		buttonRoiColor    .addActionListener(this);
+		buttonDrawTool    .addActionListener(this);
+		buttonSettingsBack.addActionListener(this);
 				
 		//Initiate Panel
 		add(panel);
@@ -133,37 +152,102 @@ public class ManualSegmentationPanel extends JFrame implements ActionListener {
 	}
 	
 	public void setMainPanel() {
-		
+		panel.setLayout(new GridLayout(canEdit ? 4 : 1, 1));
 		panel.removeAll();
 		if (canEdit) panel.add(buttonNewSegmentation);
 		if (canEdit) panel.add(buttonModifyObjects);
+		if (canEdit) panel.add(buttonSettings);
 		panel.add(buttonEndSession);
 		panel.repaint();
 		panel.revalidate();
+		pack();
 	}
-	
+
 	public void setSegmentPanel() {
+		panel.setLayout(new GridLayout(7, 1));
 		panel.removeAll();
 		panel.add(buttonStartObject);
 		panel.add(buttonEndObject);
 		panel.add(buttonNextFrame);
 		panel.add(buttonPreviousFrame);
 		panel.add(buttonRestoreSelection);
+		panel.add(buttonSettings);
 		panel.add(buttonMainMenu);
 		panel.repaint();
 		panel.revalidate();
+		pack();
+	}
+
+	/**
+	 * Shows the Settings sub-panel.
+	 * @param fromSegment true when entered from the segmentation panel — adds the draw-tool toggle.
+	 */
+	public void setSettingsPanel(boolean fromSegment) {
+		int rows = fromSegment ? 3 : 2;
+		panel.setLayout(new GridLayout(rows, 1));
+		panel.removeAll();
+		panel.add(buttonRoiColor);
+		if (fromSegment) {
+			updateDrawToolButton(Prefs.get(ManualSegmentationController.PREF_TOOL, "polygon"));
+			panel.add(buttonDrawTool);
+		}
+		panel.add(buttonSettingsBack);
+		panel.repaint();
+		panel.revalidate();
+		pack();
+	}
+
+	/** Updates the draw-tool toggle button label to reflect the currently stored preference. */
+	public void updateDrawToolButton(String tool) {
+		buttonDrawTool.setText("freehand".equals(tool) ? "Tool: Freehand" : "Tool: Polygon");
 	}
 	
 	public void setModificationPanel() {
+		panel.setLayout(new GridLayout(7, 1));
 		panel.removeAll();
 		panel.add(buttonDeleteObject);
 		panel.add(buttonMergeObject);
+		panel.add(buttonRedrawSegment);
 		panel.add(buttonSplitObject);
 		panel.add(buttonLinkObjects);
 		panel.add(buttonUnlinkObjects);
 		panel.add(buttonMainMenu);
 		panel.repaint();
 		panel.revalidate();
+		pack();
+	}
+
+	/**
+	 * Switches the panel to split-line mode: hides all other buttons and shows
+	 * only "Apply Split" and "Cancel Split". Called after the user clicks Split
+	 * and selects a target object, prompting them to draw a bisecting line ROI.
+	 */
+	public void setSplitLinePanel() {
+		panel.setLayout(new GridLayout(3, 1));
+		panel.removeAll();
+		panel.add(new javax.swing.JLabel("Draw a line across the object, then:"));
+		panel.add(buttonConfirmSplit);
+		panel.add(buttonCancelSplit);
+		panel.repaint();
+		panel.revalidate();
+		pack();
+	}
+
+	/**
+	 * Switches the panel to redraw-segment mode: hides all other buttons and shows
+	 * only "Apply Redraw" and "Cancel Redraw". Called after the user clicks Redraw
+	 * Segment with exactly one object selected, prompting them to draw a replacement
+	 * outline for the segment on the currently displayed frame.
+	 */
+	public void setRedrawSegmentPanel() {
+		panel.setLayout(new GridLayout(3, 1));
+		panel.removeAll();
+		panel.add(new javax.swing.JLabel("Draw a new outline for this frame, then:"));
+		panel.add(buttonApplyRedraw);
+		panel.add(buttonCancelRedraw);
+		panel.repaint();
+		panel.revalidate();
+		pack();
 	}
 	
 	public void stateDataLoaded(boolean loaded) {
@@ -214,12 +298,21 @@ public class ManualSegmentationPanel extends JFrame implements ActionListener {
 		//Object modification buttons
 		if (e.getSource() == buttonDeleteObject) controller.deleteObject();
 		if (e.getSource() == buttonMergeObject) controller.mergeObject();
-		if (e.getSource() == buttonSplitObject) controller.splitObject();
-		if (e.getSource() == buttonLinkObjects) controller.linkObject();
+		if (e.getSource() == buttonRedrawSegment) controller.startRedrawSegment();
+		if (e.getSource() == buttonApplyRedraw)  controller.applyRedrawSegment();
+		if (e.getSource() == buttonCancelRedraw) controller.cancelRedrawSegment();
+		if (e.getSource() == buttonSplitObject)  controller.splitObject();
+		if (e.getSource() == buttonConfirmSplit) controller.confirmSplitLine();
+		if (e.getSource() == buttonCancelSplit)  controller.cancelSplit();
+		if (e.getSource() == buttonLinkObjects)   controller.linkObject();
 		if (e.getSource() == buttonUnlinkObjects) controller.unLinkObject();
-		
+		if (e.getSource() == buttonSettings)      controller.openSettings();
+		if (e.getSource() == buttonRoiColor)      controller.changeRoiColor();
+		if (e.getSource() == buttonDrawTool)      controller.toggleDrawTool();
+		if (e.getSource() == buttonSettingsBack)  controller.closeSettings();
+
 		//Main menu
-		if (e.getSource() == buttonMainMenu) controller.mainMenu();	
+		if (e.getSource() == buttonMainMenu) controller.mainMenu();
 	}	
 }
 

@@ -13,25 +13,29 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 
 import ij.ImagePlus;
+import ij.Prefs;
 
 /**
- * View window for manual recursive (void/subsegmentation) controls.
- * Mirrors ManualSegmentationPanel but adds a "Next Cell" button so the user can
- * advance to the next parent cell when finished segmenting voids in the current one.
+ * View window for manual recursive (subsegmentation) controls.
+ * Mirrors ManualSegmentationPanel but adds a "Next Segment" button so the user can
+ * advance to the next parent segment when finished segmenting subsegments in the current one.
  *
  * Panel layout:
  *   Main Menu  : Start Segmentation | End Session
  *   Segment    : Start Object | End Object | Next Frame | Previous Frame |
- *                Restore Selection | Next Cell | Main Menu
+ *                Restore Selection | Next Segment | Main Menu
  *
- * The window title is updated each time a new parent cell is shown via
- * setCellName(String), displaying the cell's display name in the title bar.
+ * The window title is updated each time a new parent segment is shown via
+ * setCellName(String), displaying the segment's display name in the title bar.
  */
 public class RecursionManualPanel extends JFrame implements ActionListener {
 
 	private static final long serialVersionUID = 7712834501029384756L;
 
 	RecursionManualController controller;
+
+	/** When false, segmentation and modification buttons are hidden — view-only mode. */
+	boolean canEdit;
 
 	JPanel panel;
 
@@ -46,23 +50,35 @@ public class RecursionManualPanel extends JFrame implements ActionListener {
 	JButton buttonRestoreSelection = new JButton("Restore Selection");
 	JButton buttonEndObject        = new JButton("End Object");
 
-	/** Advances to the next parent cell without ending the session. */
-	JButton buttonNextCell         = new JButton("Next Cell");
+	/** Advances to the next parent segment without ending the session. */
+	JButton buttonNextCell         = new JButton("Next Segment");
 
 	// ── Modification panel ────────────────────────────────────────────────
 	JButton buttonModify           = new JButton("Modify");
 	JButton buttonDeleteObject     = new JButton("Delete Object");
 	JButton buttonMergeObjects     = new JButton("Merge Objects");
+	JButton buttonRedrawSegment    = new JButton("Redraw Segment");
+
+	// ── Redraw-segment sub-panel ─────────────────────────────────────────
+	JButton buttonApplyRedraw      = new JButton("Apply Redraw");
+	JButton buttonCancelRedraw     = new JButton("Cancel Redraw");
 
 	// ── Shared ────────────────────────────────────────────────────────────────
 	JButton buttonMainMenu         = new JButton("Main Menu");
 
+	// ── Settings sub-panel ────────────────────────────────────────────────────
+	JButton buttonSettings         = new JButton("Settings");
+	JButton buttonRoiColor         = new JButton("ROI Color...");
+	JButton buttonDrawTool         = new JButton("Tool: Polygon");
+	JButton buttonSettingsBack     = new JButton("Back");
+
 	/** Base title prefix — cell name is appended dynamically. */
 	private static final String TITLE_PREFIX = "Seg2Tracks — Recursive Segmentation";
 
-	public RecursionManualPanel(RecursionManualController controller) {
+	public RecursionManualPanel(RecursionManualController controller, boolean canEdit) {
 		super(TITLE_PREFIX);
 		this.controller = controller;
+		this.canEdit    = canEdit;
 		setAlwaysOnTop(true);
 	}
 
@@ -85,7 +101,14 @@ public class RecursionManualPanel extends JFrame implements ActionListener {
 		buttonModify          .addActionListener(this);
 		buttonDeleteObject    .addActionListener(this);
 		buttonMergeObjects    .addActionListener(this);
+		buttonRedrawSegment   .addActionListener(this);
+		buttonApplyRedraw     .addActionListener(this);
+		buttonCancelRedraw    .addActionListener(this);
 		buttonMainMenu        .addActionListener(this);
+		buttonSettings        .addActionListener(this);
+		buttonRoiColor        .addActionListener(this);
+		buttonDrawTool        .addActionListener(this);
+		buttonSettingsBack    .addActionListener(this);
 
 		add(panel);
 		pack();
@@ -95,21 +118,34 @@ public class RecursionManualPanel extends JFrame implements ActionListener {
 
 	// ── Panel states ──────────────────────────────────────────────────────────
 
-	/** Shows the top-level menu: start segmenting, modify, or end session. */
+	/**
+	 * Shows the top-level menu.
+	 * Edit mode   : Segmentation | Modify | End Session
+	 * Preview mode: Next Segment | End Session   (sidebar handles all segment switching)
+	 */
 	public void setMainPanel() {
+		int rows = canEdit ? 4 : 2;
+		panel.setLayout(new GridLayout(rows, 1));
 		panel.removeAll();
-		panel.add(buttonNewSegmentation);
-		panel.add(buttonModify);
+		if (canEdit) {
+			panel.add(buttonNewSegmentation);
+			panel.add(buttonModify);
+			panel.add(buttonSettings);
+		} else {
+			panel.add(buttonNextCell);
+		}
 		panel.add(buttonEndSession);
 		panel.repaint();
 		panel.revalidate();
+		pack();
 	}
 
 	/**
-	 * Shows the per-cell segmentation controls, including the "Next Cell" button.
+	 * Shows the per-segment segmentation controls, including the "Next Segment" button.
 	 * Call stateObject() immediately after to set initial button enable states.
 	 */
 	public void setSegmentPanel() {
+		panel.setLayout(new GridLayout(8, 1));
 		panel.removeAll();
 		panel.add(buttonStartObject);
 		panel.add(buttonEndObject);
@@ -117,20 +153,66 @@ public class RecursionManualPanel extends JFrame implements ActionListener {
 		panel.add(buttonPreviousFrame);
 		panel.add(buttonRestoreSelection);
 		panel.add(buttonNextCell);
+		panel.add(buttonSettings);
 		panel.add(buttonMainMenu);
 		panel.repaint();
 		panel.revalidate();
+		pack();
 	}
 
-	/** Shows the modification controls: delete, merge, or return to main menu. */
+	/**
+	 * Shows the Settings sub-panel.
+	 * @param fromSegment true when entered from the segmentation panel — adds the draw-tool toggle.
+	 */
+	public void setSettingsPanel(boolean fromSegment) {
+		int rows = fromSegment ? 3 : 2;
+		panel.setLayout(new GridLayout(rows, 1));
+		panel.removeAll();
+		panel.add(buttonRoiColor);
+		if (fromSegment) {
+			updateDrawToolButton(Prefs.get(ManualSegmentationController.PREF_TOOL, "polygon"));
+			panel.add(buttonDrawTool);
+		}
+		panel.add(buttonSettingsBack);
+		panel.repaint();
+		panel.revalidate();
+		pack();
+	}
+
+	/** Updates the draw-tool toggle button label to reflect the currently stored preference. */
+	public void updateDrawToolButton(String tool) {
+		buttonDrawTool.setText("freehand".equals(tool) ? "Tool: Freehand" : "Tool: Polygon");
+	}
+
+	/** Shows the modification controls: delete, merge, redraw, or return to main menu. */
 	public void setModificationPanel() {
+		panel.setLayout(new GridLayout(5, 1));
 		panel.removeAll();
 		panel.add(buttonDeleteObject);
 		panel.add(buttonMergeObjects);
+		panel.add(buttonRedrawSegment);
 		panel.add(buttonNextCell);
 		panel.add(buttonMainMenu);
 		panel.repaint();
 		panel.revalidate();
+		pack();
+	}
+
+	/**
+	 * Switches the panel to redraw-segment mode: hides all other buttons and shows
+	 * only "Apply Redraw" and "Cancel Redraw". Called after the user clicks Redraw
+	 * Segment with exactly one track selected, prompting them to draw a replacement
+	 * outline for the segment on the currently displayed frame.
+	 */
+	public void setRedrawSegmentPanel() {
+		panel.setLayout(new GridLayout(3, 1));
+		panel.removeAll();
+		panel.add(new javax.swing.JLabel("Draw a new outline for this frame, then:"));
+		panel.add(buttonApplyRedraw);
+		panel.add(buttonCancelRedraw);
+		panel.repaint();
+		panel.revalidate();
+		pack();
 	}
 
 	/**
@@ -152,20 +234,20 @@ public class RecursionManualPanel extends JFrame implements ActionListener {
 		buttonPreviousFrame   .setEnabled(frameIteration && !firstFrame);
 		buttonRestoreSelection.setEnabled(frameIteration && !firstFrame);
 		buttonMainMenu        .setEnabled(selectingObject);
-		// "Next Cell" is available whenever the user is not mid-object
+		// "Next Segment" is available whenever the user is not mid-object
 		buttonNextCell        .setEnabled(selectingObject);
 	}
 
 	// ── Cell identity ─────────────────────────────────────────────────────────
 
 	/**
-	 * Updates the window title to reflect which parent cell is currently being
-	 * segmented.  Called by the controller each time a new cell is loaded.
+	 * Updates the window title to reflect which parent segment is currently being
+	 * segmented.  Called by the controller each time a new segment is loaded.
 	 *
 	 * @param cellName the display name of the parent LinkSet (e.g. "3", "10.1")
 	 */
 	public void setCellName(String cellName) {
-		setTitle(TITLE_PREFIX + ":  Cell " + cellName);
+		setTitle(TITLE_PREFIX + ":  Segment " + cellName);
 	}
 
 	// ── Utilities ─────────────────────────────────────────────────────────────
@@ -201,6 +283,13 @@ public class RecursionManualPanel extends JFrame implements ActionListener {
 		if (e.getSource() == buttonModify)            controller.modifyMenu();
 		if (e.getSource() == buttonDeleteObject)      controller.deleteSelectedObject();
 		if (e.getSource() == buttonMergeObjects)      controller.mergeSelectedObjects();
+		if (e.getSource() == buttonRedrawSegment)     controller.startRedrawSegment();
+		if (e.getSource() == buttonApplyRedraw)       controller.applyRedrawSegment();
+		if (e.getSource() == buttonCancelRedraw)      controller.cancelRedrawSegment();
+		if (e.getSource() == buttonSettings)          controller.openSettings();
+		if (e.getSource() == buttonRoiColor)          controller.changeRoiColor();
+		if (e.getSource() == buttonDrawTool)          controller.toggleDrawTool();
+		if (e.getSource() == buttonSettingsBack)      controller.closeSettings();
 
 		if (e.getSource() == buttonMainMenu)          controller.mainMenu();
 	}

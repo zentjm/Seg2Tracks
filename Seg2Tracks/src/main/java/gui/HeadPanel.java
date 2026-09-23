@@ -30,10 +30,13 @@ public class HeadPanel extends JPanel implements ActionListener, Observer {
 	Seg2TracksController controller;
 	
 	//Label
-	JLabel citationReference = new JLabel("Please cite: xyz");
+	JLabel citationReference = new JLabel("<html>Please cite: <i>publication pending</i></html>");
 	
 	//Help Button
-	JButton buttonHelp = new JButton ("Help");
+	JButton buttonHelp = new JButton ("User Manual");
+
+	//Change Log Button
+	JButton buttonChangeLog = new JButton ("Change Log");
 	
 	//Output Selections
 	JButton buttonOutput = new JButton ("Output");
@@ -93,11 +96,16 @@ public class HeadPanel extends JPanel implements ActionListener, Observer {
         constraints.gridx = 1;
         constraints.anchor = GridBagConstraints.LINE_END;
         add(buttonHelp, constraints);
- 
+
+        //Change Log button
+        constraints.gridx = 2;
+        add(buttonChangeLog, constraints);
+
         //Add action listeners
         buttonHelp.addActionListener(this);
+        buttonChangeLog.addActionListener(this);
         buttonOutput.addActionListener(this);
-             
+
 	}
 	
 	public void switchToOperation() {
@@ -105,24 +113,21 @@ public class HeadPanel extends JPanel implements ActionListener, Observer {
 		removeAll();
 		//ROW 0
 		constraints.gridy = 0;
-		  
+
 		//Panel title
         constraints.gridx = 0;
         constraints.anchor = GridBagConstraints.LINE_START;
         add(citationReference, constraints);
-        
 
-        
-        
         //Help button
         constraints.gridx = 1;
         constraints.anchor = GridBagConstraints.LINE_END;
         add(buttonHelp, constraints);
- 
-        //Add action listeners
-        buttonHelp.addActionListener(this);
-        buttonOutput.addActionListener(this);
-		
+
+        //Change Log button
+        constraints.gridx = 2;
+        add(buttonChangeLog, constraints);
+
         repaint();
 		revalidate();
 	}
@@ -149,6 +154,10 @@ public class HeadPanel extends JPanel implements ActionListener, Observer {
         constraints.gridx = 2;
         add(buttonHelp, constraints);
 
+        //Change Log button
+        constraints.gridx = 3;
+        add(buttonChangeLog, constraints);
+
         //ROW 1
         constraints.gridy = 1;
      
@@ -171,7 +180,10 @@ public class HeadPanel extends JPanel implements ActionListener, Observer {
 	public void actionPerformed(ActionEvent e) {
 		if (e.getSource() == buttonHelp) {
 			controller.openHelpMenu();
-		}	
+		}
+		else if (e.getSource() == buttonChangeLog) {
+			controller.openChangeLog();
+		}
 	}
 
 	public String getOutputPath () {

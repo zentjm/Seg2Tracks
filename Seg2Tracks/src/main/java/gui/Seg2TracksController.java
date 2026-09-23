@@ -14,6 +14,7 @@ import javax.swing.JProgressBar;
 import org.apache.poi.ss.usermodel.Workbook;
 
 import dataStructure.DataSet;
+import dataStructure.LinkSet;
 import dataStructure.Segment;
 import ij.ImagePlus;
 import ij.io.FileSaver;
@@ -58,20 +59,28 @@ public class Seg2TracksController {
 		loadAnalysisControllers();
 		view = new Seg2TracksPanel(this, model, headPanel, floorPanel);
 		view.createView();
-		// After all panels are constructed and the view is shown, do a final sweep so
-		// each panel's subsegmentation controls reflect the full controller list.
-		// Handles startup with multiple panels and any data already present at init time.
-		refreshSubsegmentationOnAllPanels();
 		//System.out.println("Created view");
 		analysisButtonEnabled = false;
 	}
 	
-	//Load operation panels
+	//Load operation panels, restoring recursive parent-child links saved from the prior session
 	public void loadOperationControllers() {
 		operationControllerList = new ArrayList<OperationController>();
 		operationModelList = model.getOperationModels();
-		for (int i = 0; i < operationModelList.size(); i ++) {
-			operationControllerList.add(new OperationController(this, operationModelList.get(i), operationModelList.get(i).getPanelNumber(), true));
+		for (int i = 0; i < operationModelList.size(); i++) {
+			OperationModel mod = operationModelList.get(i);
+			int parentPos = model.panelParentPositions[i];
+			if (model.panelIsRecursive[i] && parentPos >= 0 && parentPos < operationControllerList.size()) {
+				OperationController parentCtrl = operationControllerList.get(parentPos);
+				OperationController child = new OperationController(
+						this, mod, mod.getPanelNumber(), true, parentCtrl);
+				operationControllerList.add(child);
+				// Mirror the state set by runSubsegment() so hasLinkedPanels() stays accurate
+				parentCtrl.linkedPanelCount++;
+			} else {
+				operationControllerList.add(new OperationController(
+						this, mod, mod.getPanelNumber(), true));
+			}
 		}
 	}
 	
@@ -94,9 +103,14 @@ public class Seg2TracksController {
 		return analysisControllerList;
 	}
 	
-	//Open the help menu //TODO: load the help menu with information
+	//Open the user manual window
 	public void openHelpMenu() {
-		HelpMenuPanel panel = new HelpMenuPanel();	
+		HelpMenuPanel panel = new HelpMenuPanel("Seg2Tracks — User Manual", "/UserManual.md");
+	}
+
+	//Open the change log window
+	public void openChangeLog() {
+		HelpMenuPanel panel = new HelpMenuPanel("Seg2Tracks — Change Log", "/ChangeLog.md");
 	}
 	
 	//Retrieve all information from the operation panels and switch to analysis view
@@ -106,7 +120,8 @@ public class Seg2TracksController {
 		for(int i = 0; i < operationControllerList.size(); i++) {
 			operationControllerList.get(i).saveSettings(); //save the settings
 			dataSets[i] = operationControllerList.get(i).getDataSet();
-			dataSets[i].setDataSetName(operationControllerList.get(i).getDataSetName());
+			if (dataSets[i] != null)
+				dataSets[i].setDataSetName(operationControllerList.get(i).getDataSetName());
 		}
 		//Load dataSets into the analysis menu
 		for(int i = 0; i < analysisControllerList.size(); i++) {
@@ -166,13 +181,40 @@ public class Seg2TracksController {
 		operationControllerList.add(tempContr);
 		view.switchToOperation();
 	}
+
+	/**
+	 * Creates a new subsegmentation panel already linked to {@code parentController} and
+	 * inserts it immediately below the parent in the panel list so the display order
+	 * reflects the parent–child relationship.
+	 *
+	 * @param parentController the controller of the panel whose Subsegment button was pressed
+	 */
+	public void addSubsegmentPanel(OperationController parentController) {
+		RecursionOperationModel tempMod = model.addRecursionOperationModel();
+		OperationController tempContr = new OperationController(
+				this, tempMod, tempMod.getPanelNumber(), false, parentController);
+		String autoName = parentController.getDataSetName() + " (Subsegmentation)";
+		tempContr.initDataSetName(autoName);
+		operationModelList = model.getOperationModels();
+		int insertIndex = operationControllerList.indexOf(parentController) + 1;
+		operationControllerList.add(insertIndex, tempContr);
+		view.switchToOperation();
+		// If the parent DataSet was already loaded (from file) and carries embedded child
+		// DataSets, push them to this new panel immediately so it doesn't start empty.
+		propagateChildDataSets(parentController);
+	}
 	
 	public void removeOperationPanel() {
+		OperationController removing = operationControllerList.get(operationControllerList.size() - 1);
 		model.removeOperationModel();
 		operationModelList = model.getOperationModels();
-		operationControllerList.remove(operationControllerList.size()-1);
+		operationControllerList.remove(operationControllerList.size() - 1);
+		// If the removed panel was linked, notify its parent so the Subsegment button can re-enable
+		if (removing.linkedSubsegment && removing.linkedParentController != null) {
+			removing.linkedParentController.linkedPanelRemoved();
+		}
 		view.switchToOperation();
-		allSegmentationLoaded(); //Fixes panel removal bug. 
+		allSegmentationLoaded();
 	}
 	
 	public void exportResults() {
@@ -204,14 +246,12 @@ public class Seg2TracksController {
 			//Save Workbook with overlay //TODO: Ability to add to workbook
 			try {
 				String fileName = outputFilePath + File.separator + "ResultsOutput_DataSet_" + i + ".xlsx";
-				//File file = new File(fileName);
-				FileOutputStream outputStream = new FileOutputStream(fileName);
-				workbooks[i].write(outputStream);
-				//workbooks[i].close();	
+				try (FileOutputStream outputStream = new FileOutputStream(fileName)) {
+					workbooks[i].write(outputStream);
+				}
+				workbooks[i].close();
 			}
-			
 			catch (Exception e) {
-				//System.out.println("Failed to save results file: " + i);
 				e.printStackTrace();
 			}
 			
@@ -227,27 +267,67 @@ public class Seg2TracksController {
 		return dataSets;
 	}
 	
-	// Returns names of panels that have data loaded — used to populate the subsegmentation
-	// combobox. Panels with no data (null DataSet) are excluded; returns null if none loaded.
-	public String[] getDataSetNames() {
-		updateDataSets();
-		int loaded = 0;
-		for (DataSet ds : dataSets) if (ds != null) loaded++;
-		if (loaded == 0) return null;
-		String[] names = new String[loaded];
-		int j = 0;
-		for (DataSet ds : dataSets) {
-			if (ds != null) names[j++] = ds.getName();
+	/**
+	 * Scans the OperationControllers linked to {@code parentController} and, when the
+	 * freshly-loaded parent DataSet contains embedded child DataSets (from a prior
+	 * recursive segmentation run), assembles and pushes the combined RecursiveDataSet
+	 * to each linked child panel so its status label reflects the loaded data.
+	 *
+	 * @param parentController the controller whose DataSet was just loaded from file
+	 */
+	public void propagateChildDataSets(OperationController parentController) {
+		DataSet parentDS = parentController.getDataSet();
+		if (parentDS == null) return;
+		// Quick check — skip the controller scan if no cell carries a child DataSet
+		boolean hasChild = false;
+		for (LinkSet ls : parentDS.getLinkSetList()) {
+			if (ls.getChildDataSet() != null) { hasChild = true; break; }
 		}
-		return names;
+		if (!hasChild) return;
+		for (OperationController child : operationControllerList) {
+			if (child.linkedParentController == parentController) {
+				child.receiveChildDataSet(parentDS);
+			}
+		}
 	}
-	
-	
+
+	/**
+	 * Called after loading a parent DataSet.  If the DataSet contains embedded child
+	 * DataSets but no linked subsegmentation panel is currently open, automatically
+	 * creates and displays one — exactly as if the user had clicked the Subsegment
+	 * button — and then populates it via the existing propagateChildDataSets path.
+	 *
+	 * No-op when a linked panel already exists (topology was restored on startup) or
+	 * when the parent DataSet carries no embedded child data.
+	 *
+	 * @param parentController the controller whose DataSet was just loaded from file
+	 */
+	public void autoCreateSubsegmentPanel(OperationController parentController) {
+		DataSet parentDS = parentController.getDataSet();
+		if (parentDS == null) return;
+
+		// Skip if a linked child panel already exists for this parent
+		for (OperationController ctrl : operationControllerList) {
+			if (ctrl.linkedParentController == parentController) return;
+		}
+
+		// Check whether the parent DataSet actually carries embedded child DataSets
+		boolean hasChild = false;
+		for (LinkSet ls : parentDS.getLinkSetList()) {
+			if (ls.getChildDataSet() != null) { hasChild = true; break; }
+		}
+		if (!hasChild) return;
+
+		// Mirror what runSubsegment() does, then addSubsegmentPanel handles the rest
+		// (including calling propagateChildDataSets to populate the new panel).
+		parentController.linkedPanelCount++;
+		parentController.panel.buttonSubsegment.setEnabled(false);
+		addSubsegmentPanel(parentController);
+	}
+
 	//TODO, Some issues with removing panels
 	//Updates operation setting based on whether ALL possible segmentations have been run
 	public void allSegmentationLoaded() {
-		// Notify every panel so subsegmentation controls reflect newly available datasets
-		refreshSubsegmentationOnAllPanels();
 		for (OperationController ctrl: operationControllerList) {
 			if (!ctrl.isDataLoaded()) {
 				view.enableAnalysis(false);
@@ -257,14 +337,6 @@ public class Seg2TracksController {
 		view.enableAnalysis(true);
 	}
 
-	// Pushes the current dataset name list to every operation panel so their
-	// subsegmentation checkbox/combobox can be enabled or disabled as appropriate.
-	private void refreshSubsegmentationOnAllPanels() {
-		for (OperationController ctrl : operationControllerList) {
-			ctrl.refreshSubsegmentation();
-		}
-	}
-	
 	//Updates analysis setting based on whether analysis has been run
 	public void updateAnalysisLoaded() {
 		//System.out.println("Running Update Analysis Loaded");
@@ -284,25 +356,40 @@ public class Seg2TracksController {
 		view.setVisible(enabled);
 	}
 	
-	//Save data when exiting program. 
+	//Save data when exiting program.
 	public void exitProgram() {
 		//System.out.println("Exited Seg2Tracks");
-		
+
 		//Save Seg2TracksModel information (#panels)
 		model.saveSettings();
-		
+
+		// Save panel ordering for non-recursive panels only.
+		// Recursion (subsegmentation) panels are intentionally excluded: they must
+		// not reopen on startup without a parent DataSet present.  They are
+		// recreated automatically by autoCreateSubsegmentPanel() whenever a DataSet
+		// that contains embedded child data is loaded.
+		int saveIdx = 0;
+		for (OperationController ctrl : operationControllerList) {
+			if (ctrl.linkedSubsegment) continue; // never persist recursion panels
+			preferences.putInt("PANEL_ORDER_PANELNUM" + saveIdx, ctrl.panelNumber);
+			preferences.putBoolean("PANEL_RECURSIVE" + saveIdx, false);
+			preferences.putInt("PANEL_PARENT_POS" + saveIdx, -1);
+			saveIdx++;
+		}
+		preferences.putInt("OPERATION_PANEL_NUMBER", saveIdx);
+
 		//Save all OperationModel information
 		for (OperationController o: operationControllerList) {
 			o.saveSettings();
 		}
-		
+
 		//Save all AnalysisModel information
 		for (AnalysisController a: analysisControllerList) {
 			a.saveSettings();
 		}
-		
+
 		//Save Header (output) information
-		if (outputFilePath != null)preferences.put("OUTPUT_FILE_PATH", outputFilePath);
+		if (outputFilePath != null) preferences.put("OUTPUT_FILE_PATH", outputFilePath);
 	}
 }
 	

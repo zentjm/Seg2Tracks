@@ -32,6 +32,7 @@ public class ExternalSegmentationSettings extends JFrame implements ActionListen
 	
 	
 	JButton buttonLoadFromOverlay = new JButton ("Load DataSet From Overlay");
+	JButton buttonBoundaryCleanup = new JButton ("Boundary Cleanup Settings");
 	JCheckBox checkBoxEdgeExclusion;
 	
 	
@@ -65,20 +66,28 @@ public class ExternalSegmentationSettings extends JFrame implements ActionListen
 	    
 	    //ROW 1
 	    constraints.gridy = 1;
-	 
+
 	    //Segment Calculation Label
 	    constraints.gridx = 0;
 	    panel.add(buttonLoadFromOverlay, constraints);
-	    
+
 	    //ROW 2
 	    constraints.gridy = 2;
-	    
+
+	    //Boundary Cleanup Settings Button (also applies to internal segmentation, not just SARN)
+	    constraints.gridx = 0;
+	    panel.add(buttonBoundaryCleanup, constraints);
+
+	    //ROW 3
+	    constraints.gridy = 3;
+
 	    //Edge Exclusion Selection
 	    constraints.gridx = 0;
 	    //panel.add(checkBoxEdgeExclusion, constraints); //TODO: maybe get rid of this?
-	    
+
 	    //Observers
 	    buttonLoadFromOverlay.addActionListener(this);
+	    buttonBoundaryCleanup.addActionListener(this);
 	    checkBoxEdgeExclusion.addActionListener(this);
 	    
 		//Finalize JFrame/JPanel
@@ -96,7 +105,12 @@ public class ExternalSegmentationSettings extends JFrame implements ActionListen
 			DataSet dataSet = loadOverlay.run();
 			controller.setOverlayData(dataSet);
 		}
-		
+
+		if (e.getSource() == buttonBoundaryCleanup) {
+			controller.boundaryCleanupSettings();
+		}
+
+
 		/*
 		if (e.getSource() == checkBoxEdgeExclusion) {
 			controller.setExcludeExternalEdges(checkBoxEdgeExclusion.isSelected());

@@ -126,7 +126,8 @@ public class OperationModel extends Observable{
 		id.initialize(inputStack, dataSet, progressBar);
 		id.setBlur(new GaussianBlur(), controller.getGaussianBlurSigma());
 		id.setFinder(new ModifiedMaximumFinder(), controller.getMaximumFinderTolerance());
-		
+		id.setRecursiveTolerancePct(controller.getRecursiveTolerancePct());
+
 		id.run();
 		dataSet.setIdentificationExists(true);
 	}
@@ -136,6 +137,7 @@ public class OperationModel extends Observable{
 		Sarn exSeg = controller.getExternalSegmentationMethod();
 		exSeg.initialize(inputStack, dataSet, progressBar);
 		exSeg.setBlur(new GaussianBlur(), controller.getGaussianBlurSigma()); //XXX: Is this the best implemented?
+		exSeg.setCleanupParams(controller.getSearchFraction(), controller.getSearchCeiling(), controller.getSimplificationEpsilon());
 		exSeg.run();
 		dataSet.setExternalSegmentationExists(true);
 	}
@@ -145,6 +147,7 @@ public class OperationModel extends Observable{
 		Segmentation inSeg = controller.getInternalSegmentationMethod();
 		inSeg.initialize(inputStack, dataSet, progressBar);
 		inSeg.setBlur(new GaussianBlur(), controller.getGaussianBlurSigma()); //XXX: Is this the best implemented?
+		inSeg.setCleanupParams(controller.getSearchFraction(), controller.getSearchCeiling(), controller.getSimplificationEpsilon());
 		inSeg.run();
 		dataSet.setInternalSegmentationExists(true);
 	}

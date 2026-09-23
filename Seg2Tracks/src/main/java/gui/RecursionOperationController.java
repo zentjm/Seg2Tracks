@@ -7,6 +7,19 @@ package gui;
  *
  * All behaviour is inherited from OperationController; the recursive logic
  * lives in RecursionOperationModel, which overrides runIt().
+ *
+ * <h3>TODO: Override {@code runModifyInternal()} for recursive preview</h3>
+ * The inherited {@code runModifyInternal()} launches a flat
+ * {@link manualSegmentation.ManualSegmentationController} that is unaware of the
+ * cell-by-cell recursive structure.  This should be overridden here to launch a
+ * read-only variant of {@link manualSegmentation.RecursionManualController} that:
+ * <ul>
+ *   <li>Iterates cells in the same cropped-canvas layout as the editable controller.</li>
+ *   <li>Displays {@code internalPerimeter} (final void boundary) where available,
+ *       falling back to {@code externalPerimeter} (SARN envelope) — the inverse of
+ *       the editable controller's display priority.</li>
+ *   <li>Disables all drawing and modification actions (no Start Object, Delete, Merge).</li>
+ * </ul>
  */
 public class RecursionOperationController extends OperationController {
 

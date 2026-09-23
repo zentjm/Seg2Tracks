@@ -3,6 +3,7 @@ package manualSegmentation;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Point;
+import java.awt.Polygon;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.event.MouseAdapter;
@@ -12,6 +13,10 @@ import java.awt.geom.Line2D;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Random;
+
+import javax.swing.JColorChooser;
+import javax.swing.JOptionPane;
+import javax.swing.JProgressBar;
 
 import org.joml.Math;
 
@@ -25,6 +30,7 @@ import gui.Seg2TracksController;
 import gui.Seg2TracksModel;
 import identification.Identification;
 import ij.IJ;
+import ij.Prefs;
 import ij.ImageJ;
 import ij.ImagePlus;
 import ij.ImageStack;
@@ -66,6 +72,9 @@ public class ManualSegmentationController {
 
 	Roi restoreRoi;
 	
+	static final String PREF_ROI_COLOR = "seg2tracks.roi.color";
+	static final String PREF_TOOL      = "seg2tracks.tool";
+
 	//Roi roi;
 	Color color;
 	Color altColor;
@@ -77,13 +86,22 @@ public class ManualSegmentationController {
 	//Determines whether preview or editable
 	boolean canEdit;
 
+	// ── Split state ───────────────────────────────────────────────────────────
+	/** LinkSet the user has selected for splitting; null when no split is in progress. */
+	private LinkSet  splitTargetLinkSet = null;
+	/** 0-based frame index at which the split is being performed. */
+	private int      splitFrame         = -1;
+	/** True while the controller is waiting for the user to draw a bisecting line. */
+	private boolean  awaitingSplitLine  = false;
+
 	public ManualSegmentationController(int runType, OperationController controller, boolean canEdit) {
 		this.controller = controller;
 		this.runType = runType;
 		this.canEdit = canEdit;
 		imagePlus = new ImagePlus("ManualSegmentation", IJ.openVirtual(controller.getInputFilePath()).getImageStack());
-		color = new Color(0, 255, 0);
-		altColor = new Color (255, 0, 0);
+		color    = decodeColor(Prefs.get(PREF_ROI_COLOR, "#00ff00"));
+		altColor = new Color(255, 0, 0);
+		ij.gui.Roi.setColor(color);
 		initialize();
 	}
 		
@@ -222,18 +240,36 @@ public class ManualSegmentationController {
 		return new PolygonRoi(xPoints, yPoints, Roi.POLYLINE);
 	}
 	
+	/** True while the segmentation sub-panel is showing; used by openSettings() to provide context. */
+	private boolean inSegmentMode = false;
+
 	//returns to main menu
 	public void mainMenu() {
+		inSegmentMode = false;
 		if (mouseListenerActive != null && mouseListenerActive == true) {
 			mouseListenerActive = false;
 		}
-		
 		overlay.selectable(false);
 		panel.setMainPanel(); //TODO: Set booleans on LOADED Files
 		IJ.setTool("hand");
 	}
-	
+
+	public void openSettings() {
+		panel.setSettingsPanel(inSegmentMode);
+	}
+
+	public void closeSettings() {
+		if (inSegmentMode) {
+			panel.setSegmentPanel();
+			// Intentionally omit stateObject() — preserve the current button-enable
+			// state so that returning from Settings mid-draw keeps Next/End active.
+		} else {
+			mainMenu();
+		}
+	}
+
 	public void newSegmentation() {
+		inSegmentMode = true;
 		panel.setSegmentPanel();
 		panel.stateObject(true, false, false, false, true);
 		dataSet.setManuallyEdited(true);
@@ -246,10 +282,10 @@ public class ManualSegmentationController {
 		//dataSet.addLinkSet(linkSet); //TODO: autoadding to dataSet maybe not such a good idea
 		window.setUserInput(false);
 		//if (manager == null) manager = new RoiManager(true);
-		IJ.setTool("polygon");
+		IJ.setTool(Prefs.get(PREF_TOOL, "polygon"));
 		frame = imagePlus.getCurrentSlice();
 		startFrame = frame;
-		panel.stateObject(false, true, frame == startFrame, 
+		panel.stateObject(false, true, frame == startFrame,
 				frame == imagePlus.getImageStackSize(), false);
 
 		//System.out.println("Start Frame: " + startFrame + "   Frame: " + frame);
@@ -261,15 +297,16 @@ public class ManualSegmentationController {
 			panel.dialogAlert("Must select overlay for this frame");
 			return;
 		}
-		if (segment != null) { //all except for start
-			segment.setUserRoi((Roi)imagePlus.getRoi().clone()); //holds for restore
-			previousSegment = segment;
-		}
-		
-		//prevents selection out of frame
+		//prevents selection out of frame — must check BEFORE saving userRoi so an
+		//out-of-bounds draw cannot be offered back via Restore Selection
 		if (!withinBounds(imagePlus.getRoi())) {
 			panel.dialogAlert("Overlay must be within image bounds");
 			return;
+		}
+
+		if (segment != null) { //all except for start
+			segment.setUserRoi((Roi)imagePlus.getRoi().clone()); //holds for restore
+			previousSegment = segment;
 		}
 		
 		
@@ -291,24 +328,20 @@ public class ManualSegmentationController {
 	}
 	
 	public void previousFrame() {
-		
-		
+
 		linkSet.removeLastSegment();
-		
-		
+
 		//1. Reconfigure segments
 		if (linkSet.size() != 0) {
 			segment = linkSet.get(linkSet.size() - 1);
+		} else {
+			segment = null;
 		}
-		
-		//previousSegment = linkSet.get(linkSet.size() - 2);
-		
-		
-		
+
 		//2. iterate back
 		frame--;
 		imagePlus.setSlice(frame);
-		imagePlus.setRoi(segment.getUserRoi());
+		if (segment != null) imagePlus.setRoi(segment.getUserRoi());
 		
 		
 		
@@ -328,10 +361,8 @@ public class ManualSegmentationController {
 	
 	
 	public void restoreSelection() {
-		if (previousSegment.getUserRoi() == null) {
-			//System.out.println("Previous segment Roi is null");
-		}
-		imagePlus.setRoi((Roi)previousSegment.getUserRoi().clone());
+		if (previousSegment == null || previousSegment.getUserRoi() == null) return;
+		imagePlus.setRoi((Roi) previousSegment.getUserRoi().clone());
 	}
 
 	public void endObject() {
@@ -378,6 +409,7 @@ public class ManualSegmentationController {
 	}
 	
 	public void modifyMenu() {
+		inSegmentMode = false;
 		panel.setModificationPanel();
 		IJ.setTool("hand");
 		overlay.selectable(false);
@@ -389,7 +421,9 @@ public class ManualSegmentationController {
 			imagePlus.getCanvas().addMouseListener(
 				new MouseAdapter () {
 					public void mousePressed(MouseEvent event) {
-						if (mouseListenerActive) {
+						// While a Redraw Segment edit is armed, clicks are placing polygon/freehand
+						// vertices for the new outline — must not also toggle selection underneath.
+						if (mouseListenerActive && !redrawInProgress) {
 							selectObject(imagePlus.getCanvas().offScreenX(event.getX()),
 									imagePlus.getCanvas().offScreenY(event.getY()));
 						}
@@ -459,12 +493,11 @@ public class ManualSegmentationController {
 				}
 			}	
 		}
-		//System.out.println("Number of Linksets: " + dataSet.getLinkSetList().size());
-		imagePlus.getCanvas().repaintOverlay();
+		imagePlus.updateAndDraw();
 	}
-	
-	
-	
+
+
+
 	public void mergeObject() {
 	
 		int startSet1 = Integer.MAX_VALUE;
@@ -656,7 +689,7 @@ public class ManualSegmentationController {
 			overlay.add(seg.getRoi()); //TODO: Better naming scheme?
 		}
 		imagePlus.setOverlay(overlay);
-		controller.setModifyData(0, dataSet); //0 means external segmentation
+		controller.setModifyData(runType, dataSet); //commit the merge on the same channel that was edited
 		imagePlus.getCanvas().repaintOverlay();
 		
 		//System.out.println("newLink size is: " + newLink.size());
@@ -667,28 +700,176 @@ public class ManualSegmentationController {
 				//System.out.println("newLink @ " + i + " is null");
 			}
 		}
-		
+
 	}
-	
-	
-	
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// Per-segment SARN area editing ("Redraw Segment")
+	//
+	// Corrects a single frame's outline (externalPerimeter) within an
+	// already-committed track, without deleting and re-drawing the whole track.
+	// Reuses the existing click-to-select mechanism (selectObject() /
+	// getRoiSelected()) that Delete and Merge already use — this action just
+	// requires exactly one object selected, then acts on whichever frame is
+	// currently displayed within it. The edit replaces the Segment object at
+	// that frame — same LinkSet, same position, so the track stays linked
+	// ahead and behind exactly as before — using the same getSegment() path
+	// every other manual draw in this controller already uses.
+	//
+	// TODO: if this dataset already has downstream analysis results computed
+	// against the old boundary, redrawing a segment could invalidate them. It
+	// would be reasonable to warn the user before allowing the redraw in that
+	// case. Not implemented.
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	/** True while a Redraw Segment edit is armed (drawing in progress, awaiting Apply/Cancel). */
+	private boolean redrawInProgress = false;
+
+	/** The LinkSet whose current-frame segment is being redrawn. */
+	private LinkSet redrawTargetLinkSet;
+
+	/**
+	 * Returns the single LinkSet with any selected (red-highlighted) segment in
+	 * dataSet, or null if zero or more than one distinct LinkSet is selected.
+	 */
+	private LinkSet getSingleSelectedLinkSet() {
+		LinkSet found = null;
+		for (int i = 0; i < dataSet.getFrameSetList().length; i++) {
+			for (Segment seg : dataSet.getFrameSet(i)) {
+				if (seg.getRoiSelected()) {
+					LinkSet ls = seg.getLinkSet();
+					if (ls == null) continue;
+					if (found == null) found = ls;
+					else if (found != ls) return null; // more than one distinct object selected
+				}
+			}
+		}
+		return found;
+	}
+
+	/** Finds the segment belonging to {@code ls} on frame {@code frame} in dataSet, or null. */
+	private Segment getSegmentOnFrame(LinkSet ls, int frame) {
+		if (frame < 0 || frame >= dataSet.getFrameSetList().length) return null;
+		for (Segment s : dataSet.getFrameSet(frame)) {
+			if (s.getLinkSet() == ls) return s;
+		}
+		return null;
+	}
+
+	/**
+	 * Begins a Redraw Segment edit: validates exactly one object is selected and that
+	 * it has a segment on the currently displayed frame, then arms drawing mode.
+	 */
+	public void startRedrawSegment() {
+		LinkSet target = getSingleSelectedLinkSet();
+		if (target == null) {
+			panel.dialogAlert("Select exactly one object (click to select) before redrawing a segment.");
+			return;
+		}
+
+		int frame = imagePlus.getCurrentSlice() - 1;
+		Segment seg = getSegmentOnFrame(target, frame);
+		if (seg == null) {
+			panel.dialogAlert("The selected object has no segment on the current frame. "
+					+ "Navigate to a frame within its track, then try again.");
+			return;
+		}
+
+		redrawTargetLinkSet = target;
+		redrawInProgress = true;
+		IJ.setTool(Prefs.get(PREF_TOOL, "polygon"));
+		imagePlus.setRoi(seg.getRoi()); // preload the current outline as a starting point
+		panel.setRedrawSegmentPanel();
+	}
+
+	/**
+	 * Commits the drawn outline as the replacement for the selected object's segment
+	 * on the current frame.
+	 */
+	public void applyRedrawSegment() {
+		if (imagePlus.getRoi() == null) {
+			panel.dialogAlert("Must draw a new outline before applying.");
+			return;
+		}
+		if (!withinBounds(imagePlus.getRoi())) {
+			panel.dialogAlert("Outline must be within image bounds");
+			return;
+		}
+
+		int frame = imagePlus.getCurrentSlice() - 1;
+
+		Segment oldSeg = getSegmentOnFrame(redrawTargetLinkSet, frame);
+		if (oldSeg == null) {
+			panel.dialogAlert("Could not locate the segment to replace. Redraw cancelled.");
+			cancelRedrawSegment();
+			return;
+		}
+
+		Segment newSeg = getSegment(frame, imagePlus.getRoi());
+		newSeg.setLinkSet(redrawTargetLinkSet);
+
+		int trackIdx = redrawTargetLinkSet.indexOf(oldSeg);
+		if (trackIdx >= 0) redrawTargetLinkSet.set(trackIdx, newSeg);
+
+		FrameSet frameSet = dataSet.getFrameSet(frame);
+		int frameIdx = frameSet.indexOf(oldSeg);
+		if (frameIdx >= 0) frameSet.set(frameIdx, newSeg);
+
+		if (oldSeg.getRoi() != null) overlay.remove(oldSeg.getRoi());
+		Roi newRoi = newSeg.getRoi();
+		if (newRoi != null) {
+			newRoi.setStrokeColor(color);
+			newRoi.setStrokeWidth(2);
+			newRoi.setPosition(frame + 1);
+			overlay.add(newRoi);
+		}
+
+		// Clear selection across the whole track — it was selected (red) to enter this
+		// mode; leave everything deselected afterward, matching mergeObject()'s convention.
+		for (Segment s : redrawTargetLinkSet) {
+			s.setRoiSelected(false);
+			if (s.getRoi() != null) s.getRoi().setStrokeColor(color);
+		}
+
+		imagePlus.setOverlay(overlay);
+		controller.setModifyData(runType, dataSet);
+		imagePlus.getCanvas().repaintOverlay();
+		controller.autosave();
+
+		finishRedrawSegment();
+	}
+
+	/** Discards the drawn outline and returns to the modification panel without changing any data. */
+	public void cancelRedrawSegment() {
+		imagePlus.killRoi();
+		finishRedrawSegment();
+	}
+
+	/** Restores normal navigation and returns to the modification panel after Apply or Cancel. */
+	private void finishRedrawSegment() {
+		redrawInProgress = false;
+		redrawTargetLinkSet = null;
+		IJ.setTool("hand");
+		panel.setModificationPanel();
+	}
+
 	//Merges based on line intersections.
 	private Point[] mergeSegments(Segment segA, Segment segB) {
 		
 		/**
 		 * Code Snippet Purpose: gets the external points of the segments to be merged
-		 * 
-		 * The use of shortcutPerimeter is absolutely necessary, as otherwise a set of perimeter points
+		 *
+		 * The use of removeLoops is absolutely necessary, as otherwise a set of perimeter points
 		 * (1,2,3) that have the locations (A, B, A) will cause an error. This might be corrected in the
-		 * future (TODO) but shorcutPerimeter will trim those points down to just (A) to avoid the error
-		 * from happening. ShortcutPerimeter and the subsequent intersection-based code requires that 
-		 * straightPerimeter has at some point been enacted but if modifying an automatic it should already 
-		 * have been run. However, I would need to confirm (TODO) that happens with all previous manual modification 
-		 * changes as well 
+		 * future (TODO) but removeLoops will trim those points down to just (A) to avoid the error
+		 * from happening. removeLoops and the subsequent intersection-based code requires that
+		 * straightPerimeter has at some point been enacted but if modifying an automatic it should already
+		 * have been run. However, I would need to confirm (TODO) that happens with all previous manual modification
+		 * changes as well
 		 */
-		
-		Point[] A = GeometricCalculations.shortcutPerimeter(GeometricCalculations.straightPerimeter(segA.getExternalPerimeter()));
-		Point[] B = GeometricCalculations.shortcutPerimeter(GeometricCalculations.straightPerimeter(segB.getExternalPerimeter()));
+
+		Point[] A = GeometricCalculations.removeLoops(GeometricCalculations.straightPerimeter(segA.getExternalPerimeter()));
+		Point[] B = GeometricCalculations.removeLoops(GeometricCalculations.straightPerimeter(segB.getExternalPerimeter()));
 		
 		
 		/**
@@ -807,8 +988,16 @@ public class ManualSegmentationController {
 		 * while loop when creating the subarray from the identified start and end points
 		 */
 		
-		int maxLength = 0;;
-		Point startIntersectB= null;
+		// Need at least two distinct contact points to form a valid merged perimeter.
+		// With fewer contacts the while-loop boundary conditions degenerate (start == end),
+		// producing a half-perimeter. Alert the user and abort rather than silently corrupt.
+		if (contacts.size() < 2) {
+			panel.dialogAlert("Could not merge: insufficient boundary overlap between selected objects.");
+			return null;
+		}
+
+		int maxLength = 0;
+		Point startIntersectB = null;
 		Point endIntersectB = null;
 		int start = 0;
 		int end = 0;
@@ -939,26 +1128,610 @@ public class ManualSegmentationController {
 		/**
 		 * Code Snippet Purpose: converts C[] to new segment and returns.
 		 *
-		 * @possiblebugs: Maybe need to use the straightPerimeter or shortcutPerimeter 
+		 * @possiblebugs: Maybe need to use the straightPerimeter or removeLoops
 		 * here for some applications? no idea..
 		 */
 		
 		return C;
 	}
 
-	//TODO
+	// ── Split command ─────────────────────────────────────────────────────────
+
+	/**
+	 * Phase 1 of the split workflow. Validates that exactly one object is selected
+	 * in the current frame, then transitions to line-drawing mode: activates
+	 * ImageJ's Line tool and switches the panel to the split-line sub-panel.
+	 */
 	public void splitObject() {
-		
+		int currentFrameIdx = imagePlus.getCurrentSlice() - 1;
+
+		// Identify the one selected LinkSet in this frame
+		LinkSet selectedLS = null;
+		FrameSet fs = dataSet.getFrameSet(currentFrameIdx);
+		if (fs == null) { panel.dialogAlert("No segments in this frame."); return; }
+		for (Segment seg : fs) {
+			if (seg.getRoiSelected()) {
+				if (selectedLS == null) {
+					selectedLS = seg.getLinkSet();
+				} else if (selectedLS != seg.getLinkSet()) {
+					panel.dialogAlert("Select exactly one object to split.");
+					return;
+				}
+			}
+		}
+		if (selectedLS == null) {
+			panel.dialogAlert("No object selected. Click an object first, then press Split.");
+			return;
+		}
+
+		// Confirm the segment has a SARN perimeter
+		Segment segInFrame = null;
+		for (Segment seg : selectedLS) {
+			if (seg.getFrame() == currentFrameIdx) { segInFrame = seg; break; }
+		}
+		if (segInFrame == null || segInFrame.getExternalPerimeter() == null) {
+			panel.dialogAlert("Selected object has no SARN perimeter in this frame.\n"
+					+ "Run external segmentation before using Split.");
+			return;
+		}
+
+		// Store state and enter line-drawing mode
+		splitTargetLinkSet  = selectedLS;
+		splitFrame          = currentFrameIdx;
+		awaitingSplitLine   = true;
+		mouseListenerActive = false;   // suspend click-selection while drawing line
+		IJ.setTool("line");
+		panel.setSplitLinePanel();
 	}
-	
-	//TODO
+
+	/**
+	 * Cancels an in-progress split and returns to the modification panel.
+	 */
+	public void cancelSplit() {
+		splitTargetLinkSet  = null;
+		splitFrame          = -1;
+		awaitingSplitLine   = false;
+		mouseListenerActive = true;
+		IJ.setTool("hand");
+		panel.setModificationPanel();
+	}
+
+	/**
+	 * Phase 2 of the split workflow. Called when the user clicks "Apply Split"
+	 * after drawing a bisecting line ROI. Validates the line, finds maxima on
+	 * each side, re-runs SARN from each seed, propagates both branches forward
+	 * and backward through the stack, and replaces the original LinkSet with two.
+	 */
+	public void confirmSplitLine() {
+		if (!awaitingSplitLine || splitTargetLinkSet == null) return;
+
+		// ── 1. Validate the line ROI ──────────────────────────────────────────
+		Roi lineRoi = imagePlus.getRoi();
+		if (lineRoi == null || lineRoi.getType() != Roi.LINE) {
+			panel.dialogAlert("Please draw a straight line across the object first\n"
+					+ "(activate the Line tool, drag across the object, then click Apply Split).");
+			return;
+		}
+
+		// Extract line endpoints from the float polygon (first and last point)
+		ij.process.FloatPolygon fp = lineRoi.getFloatPolygon();
+		double lx1 = fp.xpoints[0], ly1 = fp.ypoints[0];
+		double lx2 = fp.xpoints[fp.npoints - 1], ly2 = fp.ypoints[fp.npoints - 1];
+
+		// ── 2. Find the segment to split ──────────────────────────────────────
+		Segment segToSplit = null;
+		for (Segment seg : splitTargetLinkSet) {
+			if (seg.getFrame() == splitFrame) { segToSplit = seg; break; }
+		}
+		if (segToSplit == null || segToSplit.getExternalPerimeter() == null) {
+			panel.dialogAlert("Cannot locate the segment perimeter. Has segmentation been cleared?");
+			cancelSplit();
+			return;
+		}
+		Point[] perim = segToSplit.getExternalPerimeter();
+
+		// ── 3. Validate the line bisects the perimeter (≥ 2 crossings) ───────
+		int crossings = 0;
+		for (int i = 0; i < perim.length; i++) {
+			Point p1 = perim[i];
+			Point p2 = perim[(i + 1) % perim.length];
+			if (Line2D.linesIntersect(lx1, ly1, lx2, ly2, p1.x, p1.y, p2.x, p2.y)) crossings++;
+		}
+		if (crossings < 2) {
+			panel.dialogAlert("The line does not cross the object boundary at two points.\n"
+					+ "Draw the line so it passes all the way through the object.");
+			return;
+		}
+
+		// ── 4. Blurred frame and tolerance for this frame ─────────────────────
+		ImageStack stack = imagePlus.getImageStack();
+		ImageProcessor blurredFrame = stack.getProcessor(splitFrame + 1).duplicate();
+		if (controller.getInvertIntensity()) blurredFrame.invert();
+		new GaussianBlur().blurGaussian(blurredFrame, controller.getGaussianBlurSigma());
+		double tolerance = computeTolerance(blurredFrame);
+
+		// ── 5. Find the best maxima on each side of the line ──────────────────
+		Polygon allMaxima = new ModifiedMaximumFinder().getMaxima(blurredFrame, tolerance, true);
+		Point bestSideA = null, bestSideB = null;
+		int   bestIntA  = Integer.MIN_VALUE, bestIntB = Integer.MIN_VALUE;
+
+		for (int mi = 0; mi < allMaxima.npoints; mi++) {
+			int mx = allMaxima.xpoints[mi];
+			int my = allMaxima.ypoints[mi];
+			// Keep only maxima inside the segment perimeter
+			if (!GeometricCalculations.pointInsideShape(new Point(mx, my), perim, imagePlus.getWidth()))
+				continue;
+			// Classify by side of the line using the cross product sign
+			double cross = (lx2 - lx1) * (my - ly1) - (ly2 - ly1) * (mx - lx1);
+			int intensity = blurredFrame.get(mx, my);
+			if (cross >= 0) {
+				if (intensity > bestIntA) { bestIntA = intensity; bestSideA = new Point(mx, my); }
+			} else {
+				if (intensity > bestIntB) { bestIntB = intensity; bestSideB = new Point(mx, my); }
+			}
+		}
+
+		if (bestSideA == null || bestSideB == null) {
+			panel.dialogAlert("Could not find detectable intensity peaks on both sides of the line.\n"
+					+ "Try adjusting the line position, or check that Object ID parameters are set correctly.");
+			return;   // don't cancel — let the user try a different line
+		}
+
+		// ── 6. Valley check — warn if no clear intensity valley exists ─────────
+		int numSamples = (int) java.lang.Math.max(
+				java.lang.Math.abs(bestSideB.x - bestSideA.x),
+				java.lang.Math.abs(bestSideB.y - bestSideA.y)) + 1;
+		int minValley = java.lang.Math.min(bestIntA, bestIntB);
+		for (int si = 0; si <= numSamples; si++) {
+			double t  = (numSamples == 0) ? 0.0 : (double) si / numSamples;
+			int    sx = (int) java.lang.Math.round(bestSideA.x + t * (bestSideB.x - bestSideA.x));
+			int    sy = (int) java.lang.Math.round(bestSideA.y + t * (bestSideB.y - bestSideA.y));
+			if (sx >= 0 && sx < blurredFrame.getWidth() && sy >= 0 && sy < blurredFrame.getHeight())
+				minValley = java.lang.Math.min(minValley, blurredFrame.get(sx, sy));
+		}
+		boolean hasValley = (java.lang.Math.min(bestIntA, bestIntB) - minValley) > tolerance * 0.5;
+		if (!hasValley) {
+			int choice = JOptionPane.showConfirmDialog(null,
+					"No clear intensity valley detected between the two peaks.\n"
+					+ "The split may not represent two genuinely separate objects.\n"
+					+ "Continue anyway?",
+					"Split Warning", JOptionPane.YES_NO_OPTION);
+			if (choice != JOptionPane.YES_OPTION) return;
+		}
+
+		// ── 7. Run SARN from each seed at the split frame (neighbor-aware) ────
+		Sarn sarn = controller.getExternalSegmentationMethod();
+		Segment newSegA = runSarnFromSeed(stack, bestSideA, splitFrame, sarn, bestSideB);
+		Segment newSegB = runSarnFromSeed(stack, bestSideB, splitFrame, sarn, bestSideA);
+
+		if (newSegA.getExternalPerimeter() == null || newSegB.getExternalPerimeter() == null) {
+			panel.dialogAlert("SARN could not produce a valid boundary for one or both split halves.\n"
+					+ "Try repositioning the line or adjusting segmentation parameters.");
+			cancelSplit();
+			return;
+		}
+
+		// ── 8. Create two new LinkSets ───────────────────────────────────────────
+		LinkSet linkSetA = new LinkSet(dataSet);
+		linkSetA.setName(dataSet.getLinkSetNameIterator());
+		LinkSet linkSetB = new LinkSet(dataSet);
+		linkSetB.setName(dataSet.getLinkSetNameIterator());
+
+		// ── 9. Delete original LinkSet BEFORE adding new segments ─────────────
+		deleteObject(splitTargetLinkSet);
+
+		// ── 10. Register the split-frame segments ─────────────────────────────
+		newSegA.setLinkSet(linkSetA); linkSetA.add(newSegA);
+		dataSet.getFrameSet(splitFrame).add(newSegA);
+		addSegmentToOverlay(newSegA, color);
+
+		newSegB.setLinkSet(linkSetB); linkSetB.add(newSegB);
+		dataSet.getFrameSet(splitFrame).add(newSegB);
+		addSegmentToOverlay(newSegB, color);
+
+		// ── 11. Propagate forward ─────────────────────────────────────────────
+		Point  prevCenterA = bestSideA, prevCenterB = bestSideB;
+		double radA = getEnvelopeRadius(newSegA), radB = getEnvelopeRadius(newSegB);
+		boolean aAlive = true, bAlive = true;
+
+		for (int f = splitFrame + 1; f < stack.getSize() && (aAlive || bAlive); f++) {
+			ImageProcessor frameProc = stack.getProcessor(f + 1).duplicate();
+			if (controller.getInvertIntensity()) frameProc.invert();
+			new GaussianBlur().blurGaussian(frameProc, controller.getGaussianBlurSigma());
+			double tol = computeTolerance(frameProc);
+
+			if (aAlive) {
+				Point maxA = findMaximaNearPoint(frameProc, prevCenterA, radA, tol);
+				if (maxA != null) {
+					Point neighborHint = bAlive ? prevCenterB : null;
+					Segment segA = neighborHint != null
+							? runSarnFromSeed(stack, maxA, f, sarn, neighborHint)
+							: runSarnFromSeed(stack, maxA, f, sarn);
+					segA.setLinkSet(linkSetA); linkSetA.add(segA);
+					dataSet.getFrameSet(f).add(segA);
+					addSegmentToOverlay(segA, color);
+					prevCenterA = (segA.getCenterPoint() != null) ? segA.getCenterPoint() : maxA;
+					radA = getEnvelopeRadius(segA);
+				} else { aAlive = false; }
+			}
+
+			if (bAlive) {
+				Point maxB = findMaximaNearPoint(frameProc, prevCenterB, radB, tol);
+				if (maxB != null) {
+					Point neighborHint = aAlive ? prevCenterA : null;
+					Segment segB = neighborHint != null
+							? runSarnFromSeed(stack, maxB, f, sarn, neighborHint)
+							: runSarnFromSeed(stack, maxB, f, sarn);
+					segB.setLinkSet(linkSetB); linkSetB.add(segB);
+					dataSet.getFrameSet(f).add(segB);
+					addSegmentToOverlay(segB, color);
+					prevCenterB = (segB.getCenterPoint() != null) ? segB.getCenterPoint() : maxB;
+					radB = getEnvelopeRadius(segB);
+				} else { bAlive = false; }
+			}
+		}
+
+		// ── 12. Propagate backward ────────────────────────────────────────────
+		prevCenterA = bestSideA; prevCenterB = bestSideB;
+		radA = getEnvelopeRadius(newSegA); radB = getEnvelopeRadius(newSegB);
+		aAlive = true; bAlive = true;
+
+		for (int f = splitFrame - 1; f >= 0 && (aAlive || bAlive); f--) {
+			ImageProcessor frameProc = stack.getProcessor(f + 1).duplicate();
+			if (controller.getInvertIntensity()) frameProc.invert();
+			new GaussianBlur().blurGaussian(frameProc, controller.getGaussianBlurSigma());
+			double tol = computeTolerance(frameProc);
+
+			if (aAlive) {
+				Point maxA = findMaximaNearPoint(frameProc, prevCenterA, radA, tol);
+				if (maxA != null) {
+					Point neighborHint = bAlive ? prevCenterB : null;
+					Segment segA = neighborHint != null
+							? runSarnFromSeed(stack, maxA, f, sarn, neighborHint)
+							: runSarnFromSeed(stack, maxA, f, sarn);
+					segA.setLinkSet(linkSetA); linkSetA.add(segA);
+					dataSet.getFrameSet(f).add(segA);
+					addSegmentToOverlay(segA, color);
+					prevCenterA = (segA.getCenterPoint() != null) ? segA.getCenterPoint() : maxA;
+					radA = getEnvelopeRadius(segA);
+				} else { aAlive = false; }
+			}
+
+			if (bAlive) {
+				Point maxB = findMaximaNearPoint(frameProc, prevCenterB, radB, tol);
+				if (maxB != null) {
+					Point neighborHint = aAlive ? prevCenterA : null;
+					Segment segB = neighborHint != null
+							? runSarnFromSeed(stack, maxB, f, sarn, neighborHint)
+							: runSarnFromSeed(stack, maxB, f, sarn);
+					segB.setLinkSet(linkSetB); linkSetB.add(segB);
+					dataSet.getFrameSet(f).add(segB);
+					addSegmentToOverlay(segB, color);
+					prevCenterB = (segB.getCenterPoint() != null) ? segB.getCenterPoint() : maxB;
+					radB = getEnvelopeRadius(segB);
+				} else { bAlive = false; }
+			}
+		}
+
+		// ── 13. Finish ────────────────────────────────────────────────────────
+		splitTargetLinkSet  = null;
+		splitFrame          = -1;
+		awaitingSplitLine   = false;
+		mouseListenerActive = true;
+
+		imagePlus.getCanvas().repaintOverlay();
+		panel.setModificationPanel();
+		controller.setModifyData(runType, dataSet);
+		controller.autosave();
+	}
+
+	// ── Split helpers ─────────────────────────────────────────────────────────
+
+	/**
+	 * Runs the given SARN method from a single seed point in a single frame,
+	 * optionally with neighbor seed points to make the SARN neighbor-aware
+	 * (preventing the envelope from expanding towards the neighbour).
+	 * Creates a minimal 1-frame DataSet + ImageStack for efficiency.
+	 *
+	 * @param fullStack   the full image stack (not mutated)
+	 * @param seed        the seed point (center of the new object)
+	 * @param targetFrame 0-based frame index
+	 * @param sarn        the SARN method to use (re-initialized internally)
+	 * @param neighbors   optional additional seed points added as dummy neighbors
+	 * @return a new Segment with the SARN external perimeter set, frame = targetFrame
+	 */
+	private Segment runSarnFromSeed(ImageStack fullStack, Point seed,
+			int targetFrame, Sarn sarn, Point... neighbors) {
+		// Build a 1-frame stack (avoids iterating all frames in sarn.run())
+		ImageStack singleSlice = new ImageStack(fullStack.getWidth(), fullStack.getHeight());
+		singleSlice.addSlice(fullStack.getProcessor(targetFrame + 1).duplicate());
+
+		DataSet tempDS = new DataSet(fullStack.getWidth(), fullStack.getHeight(), 1);
+		FrameSet fs    = new FrameSet(0, tempDS);
+		tempDS.addFrameSet(fs, 0);
+
+		// Primary seed
+		Segment seedSeg = new Segment(0, new Point(seed.x, seed.y));
+		fs.add(seedSeg);
+		LinkSet tempLS = new LinkSet(tempDS);
+		seedSeg.setLinkSet(tempLS);
+		tempLS.add(seedSeg);
+
+		// Neighbor seeds make SARN neighbor-aware (constrains the envelope)
+		for (Point nb : neighbors) {
+			if (nb == null) continue;
+			Segment nbSeg = new Segment(0, new Point(nb.x, nb.y));
+			fs.add(nbSeg);
+			LinkSet nbLS = new LinkSet(tempDS);
+			nbSeg.setLinkSet(nbLS);
+			nbLS.add(nbSeg);
+		}
+
+		// Run SARN with a dummy (invisible) progress bar
+		sarn.initialize(singleSlice, tempDS, new JProgressBar());
+		sarn.setBlur(new GaussianBlur(), controller.getGaussianBlurSigma());
+		sarn.setCleanupParams(controller.getSearchFraction(), controller.getSearchCeiling(), controller.getSimplificationEpsilon());
+		sarn.run();
+
+		// Build result Segment with the correct target frame
+		Segment result = new Segment(targetFrame, new Point(seed.x, seed.y));
+		result.setExternalPerimeter(seedSeg.getExternalPerimeter());
+		return result;
+	}
+
+	/**
+	 * Returns the nearest local intensity maxima to {@code center} within
+	 * {@code searchRadius} pixels (Euclidean), above {@code tolerance}.
+	 * Returns null if none is found.
+	 */
+	private Point findMaximaNearPoint(ImageProcessor blurredFrame, Point center,
+			double searchRadius, double tolerance) {
+		Polygon allMaxima = new ModifiedMaximumFinder().getMaxima(blurredFrame, tolerance, true);
+		Point   nearest   = null;
+		double  minDist   = Double.MAX_VALUE;
+		for (int i = 0; i < allMaxima.npoints; i++) {
+			double dx   = allMaxima.xpoints[i] - center.x;
+			double dy   = allMaxima.ypoints[i] - center.y;
+			double dist = java.lang.Math.sqrt(dx * dx + dy * dy);
+			if (dist <= searchRadius && dist < minDist) {
+				minDist = dist;
+				nearest = new Point(allMaxima.xpoints[i], allMaxima.ypoints[i]);
+			}
+		}
+		return nearest;
+	}
+
+	/**
+	 * Estimates the SARN envelope radius of a segment from the bounding box
+	 * of its external perimeter. Falls back to 5 × Gaussian sigma if no
+	 * perimeter is available.
+	 */
+	private double getEnvelopeRadius(Segment seg) {
+		Point[] perim = seg.getExternalPerimeter();
+		if (perim == null || perim.length == 0)
+			return controller.getGaussianBlurSigma() * 5.0;
+		int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE;
+		int minY = Integer.MAX_VALUE, maxY = Integer.MIN_VALUE;
+		for (Point p : perim) {
+			if (p.x < minX) minX = p.x;  if (p.x > maxX) maxX = p.x;
+			if (p.y < minY) minY = p.y;  if (p.y > maxY) maxY = p.y;
+		}
+		return java.lang.Math.max(maxX - minX, maxY - minY) / 2.0;
+	}
+
+	/**
+	 * Computes the absolute MaximumFinder tolerance from a blurred frame by
+	 * applying the controller's percentage tolerance to the frame's intensity range.
+	 */
+	private double computeTolerance(ImageProcessor blurredFrame) {
+		int fMin = Integer.MAX_VALUE, fMax = Integer.MIN_VALUE;
+		for (int x = 0; x < blurredFrame.getWidth(); x++) {
+			for (int y = 0; y < blurredFrame.getHeight(); y++) {
+				int v = blurredFrame.get(x, y);
+				if (v < fMin) fMin = v;
+				if (v > fMax) fMax = v;
+			}
+		}
+		return controller.getMaximumFinderTolerance() * (fMax - fMin);
+	}
+
+	/**
+	 * Creates a PolygonRoi from the segment's external perimeter, assigns it
+	 * to the segment, and adds it to the overlay at the correct frame position.
+	 */
+	private void addSegmentToOverlay(Segment seg, Color c) {
+		if (seg.getExternalPerimeter() == null) return;
+		PolygonRoi roi = getPolygonRoi(seg.getExternalPerimeter());
+		roi.setStrokeColor(c);
+		roi.setStrokeWidth(2);
+		roi.setPosition(seg.getFrame() + 1);
+		seg.setRoi(roi);
+		overlay.add(roi);
+	}
+
+	// ── Preferences ──────────────────────────────────────────────────────────
+
+	/** Opens a colour chooser; applies the chosen colour to the draw tool outline and all non-selected overlay ROIs, and persists via Prefs. */
+	public void changeRoiColor() {
+		Color chosen = JColorChooser.showDialog(panel, "Choose ROI Outline Color", color);
+		if (chosen == null) return;
+		color = chosen;
+		Prefs.set(PREF_ROI_COLOR, String.format("#%06x", chosen.getRGB() & 0xFFFFFF));
+		ij.gui.Roi.setColor(color);
+		for (LinkSet ls : dataSet.getLinkSetList()) {
+			for (Segment s : ls) {
+				if (s.getRoi() != null && !s.getRoiSelected())
+					s.getRoi().setStrokeColor(color);
+			}
+		}
+		imagePlus.updateAndDraw();
+	}
+
+	/** Toggles the drawing tool between polygon and freehand, persisting the choice via Prefs. */
+	public void toggleDrawTool() {
+		String next = "polygon".equals(Prefs.get(PREF_TOOL, "polygon")) ? "freehand" : "polygon";
+		Prefs.set(PREF_TOOL, next);
+		panel.updateDrawToolButton(next);
+	}
+
+	private static Color decodeColor(String hex) {
+		try { return Color.decode(hex); }
+		catch (NumberFormatException e) { return new Color(0, 255, 0); }
+	}
+
+	// ── Link command ─────────────────────────────────────────────────────────
+
+	/**
+	 * Merges exactly two selected LinkSets into one, ordered by frame number.
+	 * Blocked if the two tracks have any overlapping frames.
+	 *
+	 * Selection: click one segment from each track (existing selectObject()
+	 * highlights the whole LinkSet), then press Link.
+	 */
 	public void linkObject() {
-		
+
+		// ── 1. Collect the two selected LinkSets ──────────────────────────────
+		LinkSet lsA = null, lsB = null;
+		for (int i = 0; i < dataSet.getFrameSetList().length; i++) {
+			if (dataSet.getFrameSet(i) == null) continue;
+			for (Segment seg : dataSet.getFrameSet(i)) {
+				if (!seg.getRoiSelected()) continue;
+				LinkSet ls = seg.getLinkSet();
+				if      (lsA == null)  { lsA = ls; }
+				else if (ls == lsA)    { /* same LS, skip */ }
+				else if (lsB == null)  { lsB = ls; }
+				else if (ls == lsB)    { /* same LS, skip */ }
+				else {
+					panel.dialogAlert("More than two objects selected.\n"
+							+ "Click exactly one segment from each of the two tracks to link.");
+					return;
+				}
+			}
+		}
+
+		if (lsA == null || lsB == null) {
+			panel.dialogAlert("Two tracks must be selected to link.\n"
+					+ "Click one segment from each track, then press Link.");
+			return;
+		}
+
+		// ── 2. Block overlapping frame ranges ─────────────────────────────────
+		for (Segment sA : lsA) {
+			for (Segment sB : lsB) {
+				if (sA.getFrame() == sB.getFrame()) {
+					panel.dialogAlert("The two selected tracks both have a segment in frame "
+							+ (sA.getFrame() + 1) + ".\n"
+							+ "Linking tracks with overlapping frames is not supported.");
+					return;
+				}
+			}
+		}
+
+		// ── 3. Create merged LinkSet, sorted by frame ─────────────────────────
+		LinkSet merged = new LinkSet(dataSet);
+		merged.setName(dataSet.getLinkSetNameIterator());
+
+		ArrayList<Segment> allSegs = new ArrayList<Segment>();
+		for (Segment s : lsA) allSegs.add(s);
+		for (Segment s : lsB) allSegs.add(s);
+		allSegs.sort((a, b) -> Integer.compare(a.getFrame(), b.getFrame()));
+
+		for (Segment seg : allSegs) {
+			seg.setLinkSet(merged);
+			merged.add(seg);
+			seg.setRoiSelected(false);
+			if (seg.getRoi() != null) seg.getRoi().setStrokeColor(color);
+		}
+
+		// ── 4. Remove the two original LinkSets ───────────────────────────────
+		// Note: do NOT call deleteObject() — that removes segments from frameSets
+		// and overlay. We only want to update the linkSetList.
+		dataSet.getLinkSetList().remove(lsA);
+		dataSet.getLinkSetList().remove(lsB);
+
+		imagePlus.getCanvas().repaintOverlay();
+		controller.setModifyData(runType, dataSet);
+		controller.autosave();
 	}
-	
-	//TODO
+
+	// ── Unlink command ────────────────────────────────────────────────────────
+
+	/**
+	 * Splits the selected LinkSet at the current frame boundary:
+	 * segments in frames ≤ current frame → LinkSet A,
+	 * segments in frames >  current frame → LinkSet B.
+	 *
+	 * The selected LinkSet must have a segment in the current frame,
+	 * and the current frame must not be the last frame of the track.
+	 */
 	public void unLinkObject() {
-		
+
+		int currentFrameIdx = imagePlus.getCurrentSlice() - 1;
+
+		// ── 1. Identify the one selected LinkSet ──────────────────────────────
+		LinkSet selectedLS = null;
+		FrameSet fs = dataSet.getFrameSet(currentFrameIdx);
+		if (fs == null) { panel.dialogAlert("No segments in this frame."); return; }
+
+		for (Segment seg : fs) {
+			if (seg.getRoiSelected()) {
+				if (selectedLS == null) {
+					selectedLS = seg.getLinkSet();
+				} else if (selectedLS != seg.getLinkSet()) {
+					panel.dialogAlert("More than one object selected in this frame.\n"
+							+ "Click a single track segment, then press Unlink.");
+					return;
+				}
+			}
+		}
+		if (selectedLS == null) {
+			panel.dialogAlert("No object selected.\n"
+					+ "Click a segment in the frame where you want to split the track, then press Unlink.");
+			return;
+		}
+
+		// ── 2. Validate split position ────────────────────────────────────────
+		boolean hasSegInFrame = false;
+		int maxFrame = Integer.MIN_VALUE;
+		for (Segment seg : selectedLS) {
+			if (seg.getFrame() == currentFrameIdx) hasSegInFrame = true;
+			if (seg.getFrame() > maxFrame) maxFrame = seg.getFrame();
+		}
+		if (!hasSegInFrame) {
+			panel.dialogAlert("The selected track has no segment in the current frame.\n"
+					+ "Navigate to a frame where the track exists, then press Unlink.");
+			return;
+		}
+		if (currentFrameIdx >= maxFrame) {
+			panel.dialogAlert("The current frame is the last frame of this track — nothing to split off.\n"
+					+ "Select an earlier frame to unlink from.");
+			return;
+		}
+
+		// ── 3. Split into two new LinkSets ────────────────────────────────────
+		LinkSet lsA = new LinkSet(dataSet);  // frames ≤ currentFrameIdx
+		lsA.setName(dataSet.getLinkSetNameIterator());
+		LinkSet lsB = new LinkSet(dataSet);  // frames >  currentFrameIdx
+		lsB.setName(dataSet.getLinkSetNameIterator());
+
+		for (Segment seg : selectedLS) {
+			if (seg.getFrame() <= currentFrameIdx) {
+				seg.setLinkSet(lsA);
+				lsA.add(seg);
+			} else {
+				seg.setLinkSet(lsB);
+				lsB.add(seg);
+			}
+			seg.setRoiSelected(false);
+			if (seg.getRoi() != null) seg.getRoi().setStrokeColor(color);
+		}
+
+		// ── 4. Remove original LinkSet (segments stay in frameSets + overlay) ─
+		dataSet.getLinkSetList().remove(selectedLS);
+
+		imagePlus.getCanvas().repaintOverlay();
+		controller.setModifyData(runType, dataSet);
+		controller.autosave();
 	}
 	
 	//TODO

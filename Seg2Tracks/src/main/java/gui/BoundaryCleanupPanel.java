@@ -8,7 +8,6 @@ import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import javax.swing.JButton;
-import javax.swing.JCheckBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -18,47 +17,32 @@ import javax.swing.JTextField;
 import util.Tooltips;
 
 /**
- * Dialog window for configuring object identification (detection) parameters.
+ * Dialog window for configuring boundary-cleanup parameters shared by every SARN and
+ * internal-segmentation boundary-generation pipeline: how far {@code removeLoops} searches for
+ * loop/revisit artifacts (scaled by a boundary's own point count, capped by an absolute
+ * ceiling), and the {@code douglasPeucker} shape-fidelity tolerance.
  *
- * <p>Two modes are supported, controlled by {@code isRecursive}:
- * <ul>
- *   <li><b>Primary</b> ({@code isRecursive = false}): Sigma and Threshold only.
- *       The recursive tolerance has no effect in primary identification and is
- *       therefore not shown.
- *   <li><b>Recursive</b> ({@code isRecursive = true}): Sigma, Threshold, and
- *       Recursive Tolerance.  All three parameters are used when detecting voids
- *       inside masked parent-cell crops.
- * </ul>
- *
- * <p>For automatic parameter estimation, open <b>Guided Calibration</b>.  That panel
- * provides both LoG scale-space sigma estimation and DataSet-supervised sigma + threshold
- * estimation, with immediate live-preview feedback.
+ * <p>For automatic parameter estimation, open <b>Guided Calibration</b>. That panel estimates a
+ * starting point from the currently loaded dataset's own boundary point-count distribution, with
+ * immediate live-preview feedback (a before/after boundary overlay).
  */
-public class CalibrationPanel extends JFrame implements ActionListener {
+public class BoundaryCleanupPanel extends JFrame implements ActionListener {
 
 	OperationController controller;
 
-	/** True when this dialog is opened from a recursive (subsegmentation) panel. */
-	boolean isRecursive;
-
-	/** True when the panel already has loaded segmentation data.
-	 *  Changing parameters while data is loaded prompts the user to clear it. */
-	boolean loadedData;
-
 	// ── Labels ────────────────────────────────────────────────────────────────
-	JLabel labelSigma              = new JLabel("Sigma:");
-	JLabel labelThreshold          = new JLabel("Threshold (%):");
-	JLabel labelRecursiveTolerance = new JLabel("Recursive Tolerance (%):");
+	JLabel labelSearchFraction = new JLabel("Search Distance (%):");
+	JLabel labelSearchCeiling  = new JLabel("Search Distance Ceiling (px):");
+	JLabel labelEpsilon        = new JLabel("Simplification Epsilon (px):");
 
 	// ── Input fields ──────────────────────────────────────────────────────────
-	JTextField gaussianBlurSigma      = new JTextField(" ", 10);
-	JTextField maximumFinderTolerance = new JTextField(" ", 10);  // displayed as %
-	JTextField recursiveTolerancePct  = new JTextField(" ", 10);  // displayed as %
+	JTextField searchFraction = new JTextField(" ", 10); // displayed as %
+	JTextField searchCeiling  = new JTextField(" ", 10);
+	JTextField epsilon        = new JTextField(" ", 10);
 
 	// ── Buttons / controls ────────────────────────────────────────────────────
-	JCheckBox checkBoxInvertIntensity = new JCheckBox("Invert Intensity");
-	JButton   guidedCalibrationButton = new JButton("Guided Calibration");
-	JButton   buttonApply             = new JButton("Apply");
+	JButton guidedCalibrationButton = new JButton("Guided Calibration");
+	JButton buttonApply             = new JButton("Apply");
 
 	// ── Status ────────────────────────────────────────────────────────────────
 	JLabel calibrationMessage = new JLabel(" ");
@@ -70,16 +54,11 @@ public class CalibrationPanel extends JFrame implements ActionListener {
 	// ── Constructor ───────────────────────────────────────────────────────────
 
 	/**
-	 * @param controller  the OperationController whose settings this dialog edits
-	 * @param loadedData  true if segmentation data is already loaded (warns on change)
-	 * @param isRecursive true when opened from a recursive subsegmentation panel;
-	 *                    shows the Recursive Tolerance field
+	 * @param controller the OperationController whose settings this dialog edits
 	 */
-	public CalibrationPanel(OperationController controller, boolean loadedData, boolean isRecursive) {
-		super(isRecursive ? "Subsegment Identification Settings" : "Object Identification Settings");
-		this.controller  = controller;
-		this.loadedData  = loadedData;
-		this.isRecursive = isRecursive;
+	public BoundaryCleanupPanel(OperationController controller) {
+		super("Boundary Cleanup Settings");
+		this.controller = controller;
 		initialize();
 		createView();
 	}
@@ -88,13 +67,10 @@ public class CalibrationPanel extends JFrame implements ActionListener {
 
 	/** Populates fields from the controller's current stored values. */
 	public void initialize() {
-		gaussianBlurSigma.setText("" + controller.getGaussianBlurSigma());
-		// Threshold stored as fraction [0–1]; display as percent.
-		maximumFinderTolerance.setText("" + (controller.getMaximumFinderTolerance() * 100));
-		if (isRecursive) {
-			recursiveTolerancePct.setText("" + controller.getRecursiveTolerancePct());
-		}
-		checkBoxInvertIntensity.setSelected(controller.getInvertIntensity());
+		// Stored as fraction [0-1]; display as percent.
+		searchFraction.setText("" + (controller.getSearchFraction() * 100));
+		searchCeiling.setText("" + controller.getSearchCeiling());
+		epsilon.setText("" + controller.getSimplificationEpsilon());
 	}
 
 	// ── View construction ─────────────────────────────────────────────────────
@@ -112,42 +88,31 @@ public class CalibrationPanel extends JFrame implements ActionListener {
 			calibrationMessage.getFont().getSize()));
 
 		// ── Tooltips ──────────────────────────────────────────────────────────
-		labelSigma            .setToolTipText(Tooltips.ObjectID.SIGMA);
-		gaussianBlurSigma     .setToolTipText(Tooltips.ObjectID.SIGMA);
-		labelThreshold        .setToolTipText(Tooltips.ObjectID.THRESHOLD);
-		maximumFinderTolerance.setToolTipText(Tooltips.ObjectID.THRESHOLD);
-		labelRecursiveTolerance.setToolTipText(Tooltips.ObjectID.RECURSIVE_TOLERANCE);
-		recursiveTolerancePct .setToolTipText(Tooltips.ObjectID.RECURSIVE_TOLERANCE);
+		labelSearchFraction.setToolTipText(Tooltips.BoundaryCleanup.SEARCH_FRACTION);
+		searchFraction     .setToolTipText(Tooltips.BoundaryCleanup.SEARCH_FRACTION);
+		labelSearchCeiling .setToolTipText(Tooltips.BoundaryCleanup.SEARCH_CEILING);
+		searchCeiling      .setToolTipText(Tooltips.BoundaryCleanup.SEARCH_CEILING);
+		labelEpsilon       .setToolTipText(Tooltips.BoundaryCleanup.EPSILON);
+		epsilon            .setToolTipText(Tooltips.BoundaryCleanup.EPSILON);
 
 		// ── Rows ──────────────────────────────────────────────────────────────
-		// Use a running row counter so adding/removing optional rows never
-		// requires renumbering the rows that follow.
 		int row = 0;
 
-		// ROW — Sigma
+		// ROW — Search Distance %
 		constraints.gridy = row++;
 		constraints.anchor = GridBagConstraints.BASELINE_LEADING;
-		constraints.gridx = 0;  panel.add(labelSigma,        constraints);
-		constraints.gridx = 1;  panel.add(gaussianBlurSigma, constraints);
+		constraints.gridx = 0;  panel.add(labelSearchFraction, constraints);
+		constraints.gridx = 1;  panel.add(searchFraction,      constraints);
 
-		// ROW — Threshold
+		// ROW — Search Distance Ceiling
 		constraints.gridy = row++;
-		constraints.gridx = 0;  panel.add(labelThreshold,          constraints);
-		constraints.gridx = 1;  panel.add(maximumFinderTolerance,  constraints);
+		constraints.gridx = 0;  panel.add(labelSearchCeiling, constraints);
+		constraints.gridx = 1;  panel.add(searchCeiling,      constraints);
 
-		// ROW — Recursive Tolerance (recursive panels only)
-		if (isRecursive) {
-			constraints.gridy = row++;
-			constraints.gridx = 0;  panel.add(labelRecursiveTolerance, constraints);
-			constraints.gridx = 1;  panel.add(recursiveTolerancePct,   constraints);
-		}
-
-		// ROW — Invert Intensity
+		// ROW — Simplification Epsilon
 		constraints.gridy = row++;
-		constraints.gridx = 0;
-		constraints.gridwidth = 2;
-		panel.add(checkBoxInvertIntensity, constraints);
-		constraints.gridwidth = 1;
+		constraints.gridx = 0;  panel.add(labelEpsilon, constraints);
+		constraints.gridx = 1;  panel.add(epsilon,      constraints);
 
 		// ROW — Guided Calibration | Apply
 		constraints.gridy = row++;
@@ -165,7 +130,6 @@ public class CalibrationPanel extends JFrame implements ActionListener {
 		constraints.gridwidth = 1;
 
 		// ── Wire listeners ────────────────────────────────────────────────────
-		checkBoxInvertIntensity.addActionListener(this);
 		guidedCalibrationButton.addActionListener(this);
 		buttonApply            .addActionListener(this);
 
@@ -179,26 +143,21 @@ public class CalibrationPanel extends JFrame implements ActionListener {
 
 	/** Validates and pushes all field values back to the controller. */
 	public void setCalibration() {
-		if (loadedData) {
-			Object[] options = {"Ok", "Cancel"};
-			int choice = JOptionPane.showOptionDialog(null,
-				"Resetting calibration will remove currently loaded segmentations", "Warning",
-				JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE,
-				null, options, options[1]);
-			if (choice == 1) return;
-			controller.clearData(2); //TODO: enum
-		}
-
 		try {
-			controller.setGaussianBlurSigma(Double.parseDouble(gaussianBlurSigma.getText()));
-			// Threshold entered as percent; store as fraction [0–1].
-			controller.setMaximumFinderTolerance(
-				Double.parseDouble(maximumFinderTolerance.getText()) / 100.0);
-			if (isRecursive) {
-				controller.setRecursiveTolerancePct(
-					Double.parseDouble(recursiveTolerancePct.getText()));
+			// Percent entered; store as fraction [0-1].
+			double fraction = Double.parseDouble(searchFraction.getText()) / 100.0;
+			int ceiling = Integer.parseInt(searchCeiling.getText());
+			double eps = Double.parseDouble(epsilon.getText());
+
+			if (fraction <= 0 || ceiling <= 0 || eps <= 0) {
+				calibrationMessage.setForeground(Color.RED);
+				calibrationMessage.setText("All values must be positive");
+				return;
 			}
-			controller.setInvertIntensity(checkBoxInvertIntensity.isSelected());
+
+			controller.setSearchFraction(fraction);
+			controller.setSearchCeiling(ceiling);
+			controller.setSimplificationEpsilon(eps);
 			calibrationMessage.setForeground(Color.BLACK);
 			calibrationMessage.setText("New values applied");
 		} catch (NumberFormatException e) {
@@ -210,7 +169,7 @@ public class CalibrationPanel extends JFrame implements ActionListener {
 	// ── Guided calibration ────────────────────────────────────────────────────
 
 	public void runGuidedCalibration() {
-		GuidedCalibration calibrate = new GuidedCalibration(controller, isRecursive);
+		BoundaryCleanupCalibration calibrate = new BoundaryCleanupCalibration(controller);
 		calibrate.run();
 	}
 
@@ -220,9 +179,5 @@ public class CalibrationPanel extends JFrame implements ActionListener {
 	public void actionPerformed(ActionEvent e) {
 		if (e.getSource() == buttonApply)             setCalibration();
 		if (e.getSource() == guidedCalibrationButton) runGuidedCalibration();
-		if (e.getSource() == checkBoxInvertIntensity) {
-			controller.setInvertIntensity(checkBoxInvertIntensity.isSelected());
-			calibrationMessage.setText(" "); // clear any prior status message
-		}
 	}
 }

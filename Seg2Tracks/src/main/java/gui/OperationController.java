@@ -11,6 +11,7 @@ import java.io.ObjectOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.prefs.Preferences;
@@ -19,10 +20,15 @@ import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
 import javax.swing.JProgressBar;
+import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.Timer;
 
 import dataStructure.DataSet;
+import dataStructure.FrameSet;
+import dataStructure.LinkSet;
+import dataStructure.RecursiveDataSet;
+import dataStructure.Segment;
 import linkage.Linkage;
 import manualSegmentation.ManualSegmentationController;
 import manualSegmentation.RecursionManualController;
@@ -61,8 +67,15 @@ public class OperationController {
 	int internalSegmentationSelection;
 	int externalSegmentationSelection;
 	double gaussianBlurSigma;
-	double maximumFinderTolerance;
+	double maximumFinderTolerance;   // stored as fraction [0–1]; UI displays as percent
+	double recursiveTolerancePct;    // stored as percent [0–100]; used as fraction in Identification
 	boolean invertIntensity;
+
+	// Boundary Cleanup settings (removeLoops search-distance scaling + douglasPeucker
+	// tolerance) — see sarn.Sarn.setCleanupParams for the full rationale.
+	double searchFraction;         // fraction of a contour's own point count
+	int searchCeiling;             // upper bound (points) on the search window
+	double simplificationEpsilon;  // douglasPeucker perpendicular-distance tolerance (pixels)
 	
 	//DataSet acquisition and loading
 	DataSet dataSet;
@@ -80,7 +93,14 @@ public class OperationController {
 	
 	//Allow this controller to subsegment another
 	boolean subsegmentOption = false;
-	int subsegmentSelection = -1; // index into getDataSetNames(); -1 = not yet selected
+
+	// Pre-linked subsegmentation (created via the Subsegment button)
+	boolean linkedSubsegment = false;
+	OperationController linkedParentController = null; // direct reference to the parent panel's controller
+
+	// Number of linked subsegmentation panels currently open from this panel.
+	// Subsegment button is disabled while this is > 0.
+	int linkedPanelCount = 0;
 	
 	//Operation threads
 	SwingWorker runExternalSegmentation;
@@ -97,8 +117,28 @@ public class OperationController {
 		loadPlugins();
 		loadSettings(); //TODO: make settings reset if plugin class is added or removed
 		model.setController(this);
-		// subsegmentOption is driven entirely by the user ticking the checkbox; no default
 		panel = new OperationPanel(this, model, panelNumber);
+	}
+
+	/**
+	 * Constructor for panels created via the Subsegment button.
+	 * The new panel is pre-linked directly to {@code parentController} and starts in
+	 * recursive mode — no checkbox or combobox selection is required.
+	 *
+	 * @param parentController the controller of the parent panel that spawned this one
+	 */
+	public OperationController(Seg2TracksController controller, OperationModel model,
+	                           int panelNumber, boolean initialLoad, OperationController parentController) {
+		this.controller = controller;
+		this.panelNumber = panelNumber;
+		this.model = model;
+		this.linkedSubsegment = true;
+		this.linkedParentController = parentController;
+		this.subsegmentOption = true;
+		loadPlugins();
+		loadSettings();
+		model.setController(this);
+		panel = new OperationPanel(this, model, panelNumber, true);
 	}
 	
 	//Dynamically load the segmentation and linkage classes
@@ -116,25 +156,38 @@ public class OperationController {
 		internalSegmentationSelection = preferences.getInt("INTERNAL_SEGMENTATION_SELECTION" + panelNumber, 0);
 		externalSegmentationSelection = preferences.getInt("EXTERNAL_SEGMENTATION_SELECTION" + panelNumber, 0);
 		gaussianBlurSigma = preferences.getDouble("GAUSSIAN_BLUR_SIGMA" + panelNumber, 20);
-		maximumFinderTolerance = preferences.getDouble("MAXIMUM_FINDER_TOLERANCE" + panelNumber, 15);
+		// Stored as fraction [0–1]. Migrate any legacy value > 1 (was stored as a raw percent) automatically.
+		double rawTolerance = preferences.getDouble("MAXIMUM_FINDER_TOLERANCE" + panelNumber, 0.15);
+		maximumFinderTolerance = (rawTolerance > 1.0) ? rawTolerance / 100.0 : rawTolerance;
+		recursiveTolerancePct = preferences.getDouble("RECURSIVE_TOLERANCE_PCT" + panelNumber, 10.0);
 		invertIntensity = preferences.getBoolean("INVERT_INTENSITY" + panelNumber, false);
-		dataSetName = preferences.get("DATASET_NAME" + panelNumber, "DataSet" + panelNumber);
+		dataSetName = preferences.get("DATASET_NAME" + panelNumber, "Set " + (panelNumber + 1));
 		excludeInternalEdges =  preferences.getBoolean("EXCLUDE_INTERNAL_EDGES" + panelNumber, false);
 		//excludeExternalEdges =  preferences.getBoolean("EXCLUDE_EXTERNAL_EDGES" + panelNumber, false);
+		// Defaults are the same illustrative starting values documented in CLAUDE.md — the point
+		// of Boundary Cleanup Settings is that the user tunes these per dataset, not that these
+		// defaults are individually "correct."
+		searchFraction = preferences.getDouble("SEARCH_FRACTION" + panelNumber, 0.15);
+		searchCeiling = preferences.getInt("SEARCH_CEILING" + panelNumber, 400);
+		simplificationEpsilon = preferences.getDouble("SIMPLIFICATION_EPSILON" + panelNumber, 1.5);
 	}
-	
+
 	//save to preferences
 	public void saveSettings() {
 		preferences.put("INPUT_FILE_PATH" + panelNumber, inputField);
 		preferences.putInt("LINKAGE_SELECTION" + panelNumber, linkageSelection);
 		preferences.putInt("INTERNAL_SEGMENTATION_SELECTION" + panelNumber, internalSegmentationSelection);
-		preferences.putInt("EXTERNAL_SEGMENTATION_SELECTION" + panelNumber, externalSegmentationSelection);	
+		preferences.putInt("EXTERNAL_SEGMENTATION_SELECTION" + panelNumber, externalSegmentationSelection);
 		preferences.putDouble("GAUSSIAN_BLUR_SIGMA" + panelNumber, gaussianBlurSigma);
 		preferences.putDouble("MAXIMUM_FINDER_TOLERANCE" + panelNumber, maximumFinderTolerance);
+		preferences.putDouble("RECURSIVE_TOLERANCE_PCT" + panelNumber, recursiveTolerancePct);
 		preferences.putBoolean("INVERT_INTENSITY" + panelNumber, invertIntensity);
 		preferences.put("DATASET_NAME" + panelNumber, dataSetName);
 		preferences.putBoolean("EXCLUDE_INTERNAL_EDGES" + panelNumber, excludeInternalEdges);
 		//preferences.putBoolean("EXCLUDE_EXTERNAL_EDGES" + panelNumber, excludeExternalEdges);
+		preferences.putDouble("SEARCH_FRACTION" + panelNumber, searchFraction);
+		preferences.putInt("SEARCH_CEILING" + panelNumber, searchCeiling);
+		preferences.putDouble("SIMPLIFICATION_EPSILON" + panelNumber, simplificationEpsilon);
 	}
 
 	//setters for settings
@@ -161,6 +214,15 @@ public class OperationController {
 
 	public void setMaximumFinderTolerance(double maximumFinderTolerance) {
 		this.maximumFinderTolerance = maximumFinderTolerance;
+		saveSettings();
+	}
+
+	public double getRecursiveTolerancePct() {
+		return recursiveTolerancePct;
+	}
+
+	public void setRecursiveTolerancePct(double recursiveTolerancePct) {
+		this.recursiveTolerancePct = recursiveTolerancePct;
 		saveSettings();
 	}
 
@@ -193,13 +255,51 @@ public class OperationController {
 	public double getGaussianBlurSigma() {
 		return gaussianBlurSigma;
 	}
-	
+
 	public double getMaximumFinderTolerance() {
 		return maximumFinderTolerance;
+	}
+
+	public double getSearchFraction() {
+		return searchFraction;
+	}
+
+	public void setSearchFraction(double searchFraction) {
+		this.searchFraction = searchFraction;
+		saveSettings();
+	}
+
+	public int getSearchCeiling() {
+		return searchCeiling;
+	}
+
+	public void setSearchCeiling(int searchCeiling) {
+		this.searchCeiling = searchCeiling;
+		saveSettings();
+	}
+
+	public double getSimplificationEpsilon() {
+		return simplificationEpsilon;
+	}
+
+	public void setSimplificationEpsilon(double simplificationEpsilon) {
+		this.simplificationEpsilon = simplificationEpsilon;
+		saveSettings();
 	}
 	
 	public String getDataSetName() {
 		return dataSetName;
+	}
+
+	/**
+	 * Sets the DataSet name programmatically, keeping the controller field, the panel
+	 * text field, and the stored preference all in sync.  Used to give auto-generated
+	 * names to linked subsegmentation panels immediately after construction.
+	 */
+	void initDataSetName(String name) {
+		dataSetName = name;
+		panel.dataSetName.setText(name);
+		preferences.put("DATASET_NAME" + panelNumber, name);
 	}
 	
 	public JProgressBar getProgressBar() {
@@ -231,14 +331,18 @@ public class OperationController {
 		return names;
 	}
 	
-	//for datasets
-	public String[] getDataSetNames() {
-		return controller.getDataSetNames();
-	}
-	
-	
 	public void cancelExternalRun() {
-		
+		cancelExternalSegmentation();
+	}
+
+	/**
+	 * Cancels a running internal segmentation worker and resets the panel to its
+	 * pre-run state.  The background thread may continue briefly if the algorithm
+	 * does not respond to the interrupt; the UI resets immediately regardless.
+	 */
+	public void cancelInternalSegmentation() {
+		if (runInternalSegmentation != null) runInternalSegmentation.cancel(true);
+		panel.updateSegmentationLoaded(1, 0); // reset button to "Run"
 	}
 	
 	
@@ -285,8 +389,6 @@ public class OperationController {
 			loadedExternalData = false;
 			panel.updateSegmentationLoaded(0,0);
 			panel.updateSegmentationLoaded(1,0);
-			// Unlock subsegmentation controls so the user can uncheck and swap back if desired
-			if (subsegmentOption) panel.setSubsegmentationLocked(false);
 			controller.allSegmentationLoaded();
 		}
 	}
@@ -325,35 +427,46 @@ public class OperationController {
 	}
 	
 	//TODO: Enums. 0: externalSeg, 1: internalSeg
+	// Runs r on the EDT: immediately if already there, otherwise via invokeLater.
+	// Background threads (SwingWorker.doInBackground) call the setData/overlay methods,
+	// so every Swing mutation they trigger must be funneled through here.
+	private static void runOnEdt(Runnable r) {
+		if (SwingUtilities.isEventDispatchThread()) r.run();
+		else SwingUtilities.invokeLater(r);
+	}
+
 	public void setRunData(int type, DataSet dataSet) {
 		this.dataSet = dataSet;
-		//loadedData = true;
 		if (type == 1) loadedInternalData = true;
 		if (type == 0) loadedExternalData = true;
-		panel.updateSegmentationLoaded(type, 1);
-		// Lock subsegmentation controls once a recursive run has completed successfully
-		if (subsegmentOption) panel.setSubsegmentationLocked(true);
-		controller.allSegmentationLoaded();
+		final int t = type;
+		runOnEdt(() -> {
+			panel.updateSegmentationLoaded(t, 1);
+			controller.allSegmentationLoaded();
+		});
 	}
-	
+
 	//for loading a dataSet from Operation Model modify
 	//TODO: Enums. 0: externalSeg, 1: internalSeg
 	public void setModifyData(int type, DataSet dataSet) {
 		this.dataSet = dataSet;
-		//loadedData = true;
 		if (type == 1) loadedInternalData = true;
 		if (type == 0) loadedExternalData = true;
-		panel.updateSegmentationLoaded(type, 3);
-		controller.allSegmentationLoaded();	
+		final int t = type;
+		runOnEdt(() -> {
+			panel.updateSegmentationLoaded(t, 3);
+			controller.allSegmentationLoaded();
+		});
 	}
-	
+
 	public void setOverlayData(DataSet dataSet) {
 		this.dataSet = dataSet;
-		//loadedData = true;
 		loadedInternalData = true;
 		loadedExternalData = true;
-		panel.updateSegmentationLoaded(0, 2);
-		controller.allSegmentationLoaded();	
+		runOnEdt(() -> {
+			panel.updateSegmentationLoaded(0, 2);
+			controller.allSegmentationLoaded();
+		});
 	}
 	
 	//Returns dataSet to Seg2Tracks Controller and operation model
@@ -364,8 +477,12 @@ public class OperationController {
 	
 	//To create the calibration menu
 	public void calibrateChannel() {
-		//CalibrationPanel calibrationView = new CalibrationPanel(this, loadedData);
-		CalibrationPanel calibrationView = new CalibrationPanel(this, loadedInternalData || loadedExternalData);
+		new CalibrationPanel(this, loadedInternalData || loadedExternalData, linkedSubsegment);
+	}
+
+	//To create the boundary cleanup settings menu
+	public void boundaryCleanupSettings() {
+		new BoundaryCleanupPanel(this);
 	}
 	
 	public void linkageSettings() {
@@ -405,7 +522,7 @@ public class OperationController {
 			//THREAD
 			runExternalSegmentation = runExternalSegmentationThread();
 			runExternalSegmentation.execute();
-			//panel.updateSegmentationLoaded(0, 4); //TODO: effective use of a cancel button
+			panel.updateSegmentationLoaded(0, 4); // show Cancel button while running
 		}
 		else System.out.println("Input Path null");
 		
@@ -430,7 +547,7 @@ public class OperationController {
 				catch (Exception e) {
 					System.err.println("[Seg2Tracks] External segmentation failed:");
 					e.printStackTrace();
-					controller.allSegmentationLoaded();
+					runOnEdt(controller::allSegmentationLoaded);
 					return null;
 				}
 				
@@ -442,9 +559,8 @@ public class OperationController {
 	
 	
 	public void cancelExternalSegmentation() {
-		runExternalSegmentation.cancel(true);
-		if (runExternalSegmentation.isCancelled()) System.out.println("IS CANCELLED");
-		panel.updateSegmentationLoaded(0, 1);
+		if (runExternalSegmentation != null) runExternalSegmentation.cancel(true);
+		panel.updateSegmentationLoaded(0, 0); // reset button to "Run" — no data produced
 	}
 		
 
@@ -486,15 +602,14 @@ public class OperationController {
 			@Override
 			public Void doInBackground() {	
 				try {
-					model.runIt(1); 
-					controller.allSegmentationLoaded();
+					model.runIt(1);
+					if (!isCancelled()) runOnEdt(controller::allSegmentationLoaded);
 					return null;
 				}
 				catch (Exception e) {
 					System.err.println("[Seg2Tracks] Internal segmentation failed:");
 					e.printStackTrace();
-					controller.allSegmentationLoaded();
-					if (isCancelled()) {};
+					runOnEdt(controller::allSegmentationLoaded);
 					return null;
 				}
 			
@@ -503,6 +618,7 @@ public class OperationController {
 	}
 	
 	//Runs the manual editing over external segmentation //TODO: merge method with internal segmentation?
+	//TODO: Rename "Manually Edit" button — discuss appropriate replacement label (e.g. "Edit Voids", "Draw Voids")
 	public void runModifyExternal() {
 
 		// When subsegmentation is active, always open RecursionManualController.
@@ -517,7 +633,7 @@ public class OperationController {
 						+ "recursive manual segmentation.");
 				return;
 			}
-			RecursionManualController recSeg = new RecursionManualController(this, priorDataSet);
+			RecursionManualController recSeg = new RecursionManualController(this, priorDataSet, true);
 			recSeg.run();
 			return;
 		}
@@ -535,15 +651,62 @@ public class OperationController {
 	}
 	
 	
-	//Runs manual preview over internal segmentation //TODO: Change this into a dependency checkbox. 
+	/**
+	 * Opens a new subsegmentation panel pre-linked to this panel's DataSet,
+	 * then disables the Subsegment button until that panel is removed.
+	 */
+	public void runSubsegment() {
+		if (dataSet == null || !dataSet.getInternalSegmentationExists()) return;
+		if (dataSet.getLinkSetList().isEmpty()) {
+			errorMessage("No segmented objects found. Run internal segmentation before subsegmenting.");
+			return;
+		}
+		linkedPanelCount++;
+		panel.buttonSubsegment.setEnabled(false);
+		controller.addSubsegmentPanel(this);
+	}
+
+	/** Returns true while at least one linked subsegmentation panel is open from this panel. */
+	boolean hasLinkedPanels() {
+		return linkedPanelCount > 0;
+	}
+
+	/**
+	 * Called by {@link Seg2TracksController} when a linked panel spawned from this one
+	 * is removed.  Re-enables the Subsegment button when the last linked panel is gone
+	 * and internal segmentation is still loaded.
+	 */
+	void linkedPanelRemoved() {
+		if (linkedPanelCount > 0) linkedPanelCount--;
+		if (linkedPanelCount == 0 && dataSet != null && dataSet.getInternalSegmentationExists()) {
+			panel.buttonSubsegment.setEnabled(true);
+		}
+	}
+
+	//Runs manual preview over internal segmentation //TODO: Change this into a dependency checkbox.
 	public void runModifyInternal() {
-		ManualSegmentationController mSeg = new ManualSegmentationController(1, this, false); //TODO: enum for runType TODO: no runtype, only outer bounds
+		// Recursive panels: show the same cell-by-cell view as "Manually Edit" but
+		// read-only — same composite window, sidebar, and context frame; no drawing
+		// or modification controls.
+		if (subsegmentOption) {
+			DataSet priorDataSet = getPriorDataSet();
+			if (priorDataSet == null || priorDataSet.getLinkSetList().isEmpty()) {
+				errorMessage("No parent segmentation found. "
+						+ "Complete segmentation on the selected dataset before previewing.");
+				return;
+			}
+			RecursionManualController recPrev = new RecursionManualController(this, priorDataSet, false);
+			recPrev.run();
+			return;
+		}
+		// Standard (non-recursive) preview
+		ManualSegmentationController mSeg = new ManualSegmentationController(1, this, false); //TODO: enum for runType
 		if (inputFilePath == null) return; //TODO: block running if bad input path by deactivating button
-		if (dataSet == null || !dataSet.getInternalSegmentationExists()) {  
+		if (dataSet == null || !dataSet.getInternalSegmentationExists()) {
 			mSeg.runDataSet();
 			return;
-		}	
-		if (dataSet.getInternalSegmentationExists()) mSeg.runDataSet(dataSet); //TODO: Check Loaded External DataSet applies to any loaded data
+		}
+		if (dataSet.getInternalSegmentationExists()) mSeg.runDataSet(dataSet);
 	}
 	
 	public void setViewActive(boolean enabled) {
@@ -559,7 +722,10 @@ public class OperationController {
 	
 	//Loads DataSet
 	//TODO: eunps for runType, loading
-	public void loadDataSet () {		
+	public void loadDataSet () {
+		// Recursive panels carry no independent file — their data is embedded inside the
+		// parent DataSet and propagated automatically when the parent panel loads.
+		if (linkedSubsegment) return;
 		if (dataSet != null) {
 			if ((dataSet.getExternalSegmentationExists()) && !panel.dialogAlert("Overwrite external segmentation data?")) return;
 			if ((dataSet.getInternalSegmentationExists()) && !panel.dialogAlert("Overwrite internal segmentation data?")) return;
@@ -581,10 +747,13 @@ public class OperationController {
 		if (dataSet == null) {
 			panel.updateSegmentationLoaded(0, 0);
 			panel.updateSegmentationLoaded(1, 0);
-			//loadedData = false;
-			loadedInternalData = loadedExternalData = true;
+			loadedInternalData = loadedExternalData = false;
 		}
-		controller.allSegmentationLoaded();		
+		controller.allSegmentationLoaded();
+		// Push embedded child DataSets (if any) to linked recursive child panels.
+		// If no linked panel exists yet, auto-create and display one.
+		controller.propagateChildDataSets(this);
+		controller.autoCreateSubsegmentPanel(this);
 	}
 
 	//indicates if data has been loaded
@@ -595,15 +764,71 @@ public class OperationController {
 	
 	//Autosave DataSet
 	public void autosave() {
+		// Recursive (child) panels have no independent save file.
+		// Delegate to the parent panel, whose DataSet carries child results
+		// embedded in each LinkSet.childDataSet field.
+		if (linkedSubsegment) {
+			if (linkedParentController != null) linkedParentController.autosave();
+			return;
+		}
 		FileResourcesUtil util = new FileResourcesUtil();
 		if (dataSet != null) util.autosaveDataSet(dataSet);
 	}
-	
+
 	//Saves DataSet
 	public void saveExternalSegmentation () {
+		// Recursive panels carry no independent file — save via parent panel.
+		if (linkedSubsegment) return;
 		FileResourcesUtil util = new FileResourcesUtil();
 		if (dataSet != null) util.saveDataSet(panel, dataSet);
 		else System.out.println("dataSet is null");
+	}
+
+	/**
+	 * Called by {@link Seg2TracksController#propagateChildDataSets} after the parent
+	 * DataSet is loaded from file.  Assembles the per-cell embedded RecursiveDataSets
+	 * into a single combined dataset and marks this panel as containing loaded data.
+	 * No-op if this panel already holds data (avoids overwriting a freshly-run result).
+	 *
+	 * @param parentDS the parent DataSet that was just loaded
+	 */
+	void receiveChildDataSet(DataSet parentDS) {
+		if (dataSet != null) return; // Already has live data — don't overwrite
+
+		// Build a combined RecursiveDataSet from the per-cell embedded children
+		RecursiveDataSet combined = new RecursiveDataSet(
+				parentDS.getWidth(), parentDS.getHeight(), parentDS.getSize(), parentDS);
+		for (int f = 0; f < parentDS.getSize(); f++) {
+			combined.addFrameSet(new FrameSet(f, combined), f);
+		}
+
+		for (LinkSet parentLS : parentDS.getLinkSetList()) {
+			DataSet cellChild = parentLS.getChildDataSet();
+			if (cellChild == null) continue;
+			for (LinkSet childLS : cellChild.getLinkSetList()) {
+				// Add directly to list (avoids double-incrementing the name iterator)
+				combined.getLinkSetList().add(childLS);
+				combined.addChildParentMapping(childLS, parentLS);
+				for (Segment s : childLS) {
+					int f = s.getFrame();
+					if (f >= 0 && f < combined.getFrameSetList().length
+							&& combined.getFrameSet(f) != null) {
+						combined.getFrameSet(f).add(s);
+					}
+				}
+			}
+		}
+
+		if (!combined.getLinkSetList().isEmpty()) {
+			combined.setExternalSegmentationExists(true);
+			combined.setIdentificationExists(true);
+			this.dataSet = combined;
+			loadedExternalData = true;
+			runOnEdt(() -> {
+				panel.updateSegmentationLoaded(0, 2); // "Save Data Loaded"
+				controller.allSegmentationLoaded();
+			});
+		}
 	}
 	
 	public void errorMessage (String error) {
@@ -643,70 +868,20 @@ public class OperationController {
 	
 	
 	//Subsegmentation Settings
-	public boolean getSubsegmentation() {
-		return subsegmentOption;
-	}
-
-	// Called when the user ticks or unticks the subsegmentation checkbox.
-	// Swaps the model between RecursionOperationModel (checked) and OperationModel (unchecked).
-	public void setSubsegmentationEnabled(boolean enabled) {
-		subsegmentOption = enabled;
-		if (enabled) {
-			model = new RecursionOperationModel(panelNumber);
-		} else {
-			model = new OperationModel(panelNumber);
-		}
-		model.setController(this);
-	}
-
-	// Called when the user selects a dataset in the subsegmentation combobox
-	// index corresponds to the position in the array returned by getDataSetNames()
-	public void setSubsegmentationSelection(int index) {
-		subsegmentSelection = index;
-	}
-
-	// Returns the index of the dataset selected for subsegmentation (-1 if none)
-	public int getSubsegmentationSelection() {
-		return subsegmentSelection;
-	}
 
 	/**
-	 * Called by Seg2TracksController whenever any panel's dataset changes.
-	 * Passes the current dataset name list down to the panel so it can
-	 * enable/disable the subsegmentation controls accordingly.
+	 * Returns the parent DataSet for a linked subsegmentation panel.
+	 * For panels opened via the Subsegment button, delegates directly to the stored parent
+	 * controller reference (safe against list reordering).  Falls back to the preceding
+	 * panel's DataSet otherwise.
 	 */
-	public void refreshSubsegmentation() {
-		String[] names = getDataSetNames();
-		boolean anyHasInternal = false;
-		DataSet[] all = controller.getDataSets();
-		if (all != null) {
-			for (DataSet ds : all) {
-				if (ds != null && ds.getInternalSegmentationExists()) {
-					anyHasInternal = true;
-					break;
-				}
-			}
-		}
-		panel.refreshSubsegmentation(names, anyHasInternal);
-	}
-
-	//Getter for priorDataSet in recursion — returns the user-selected dataset when
-	//subsegmentation is active, otherwise falls back to the immediately prior panel.
-	// NOTE: getDataSetNames() returns a compacted array of only non-null datasets,
-	// so subsegmentSelection indexes into that compacted list, not getDataSets() directly.
-	// We re-walk the full array here to find the nth non-null entry to stay in sync.
 	public DataSet getPriorDataSet() {
-		DataSet[] dataSets = controller.getDataSets();
-		if (subsegmentOption && subsegmentSelection >= 0) {
-			int count = 0;
-			for (DataSet ds : dataSets) {
-				if (ds == null) continue;
-				if (count == subsegmentSelection) return ds;
-				count++;
-			}
+		if (linkedSubsegment && linkedParentController != null) {
+			return linkedParentController.getDataSet();
 		}
 		// Fallback: panel immediately before this one
-		if (panelNumber > 0 && panelNumber - 1 < dataSets.length) {
+		DataSet[] dataSets = controller.getDataSets();
+		if (panelNumber > 0 && dataSets != null && panelNumber - 1 < dataSets.length) {
 			return dataSets[panelNumber - 1];
 		}
 		return null;

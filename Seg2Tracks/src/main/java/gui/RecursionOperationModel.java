@@ -23,14 +23,14 @@ import segmentation.Segmentation;
 /**
  * Model for the recursive/subsegmentation operation panel.
  * Extends OperationModel to support multi-level segmentation: after a primary
- * segmentation pass identifies and tracks objects (e.g. macrophages), this model
+ * segmentation pass identifies and tracks objects (segments), this model
  * runs a second segmentation pass on the masked interior of each primary-level
- * LinkSet to find internal structures (e.g. phagosomal voids in ADCP experiments).
+ * LinkSet to find internal structures (subsegments).
  *
  * Algorithm per parent LinkSet:
- *   1. Compute a union bounding box across all frames for the parent cell.
+ *   1. Compute a union bounding box across all frames for the parent segment.
  *   2. Build a cropped, masked ImageStack — only the bbox region is kept, with
- *      pixels outside the cell's internal perimeter zeroed.
+ *      pixels outside the segment's internal perimeter zeroed.
  *   3. Run identification, segmentation, and linkage on the cropped stack.
  *   4. Translate child coordinates back to full-image space.
  *   5. Store the child DataSet on the parent LinkSet via setChildDataSet().
@@ -89,6 +89,9 @@ public class RecursionOperationModel extends OperationModel {
 
 		combinedDataSet = new RecursiveDataSet(
 			inputStack.getWidth(), inputStack.getHeight(), inputStack.getSize(), priorDataSet);
+		for (int i = 0; i < inputStack.getSize(); i++) {
+			combinedDataSet.getFrameSetList()[i] = new FrameSet(i, combinedDataSet);
+		}
 
 		progressBar.setString("Recursive segmentation");
 		progressBar.setMinimum(0);
@@ -206,6 +209,7 @@ public class RecursionOperationModel extends OperationModel {
 		id.initialize(maskedStack, childDataSet, progressBar);
 		id.setBlur(new GaussianBlur(), controller.getGaussianBlurSigma());
 		id.setFinder(new ModifiedMaximumFinder(), controller.getMaximumFinderTolerance());
+		id.setRecursiveTolerancePct(controller.getRecursiveTolerancePct());
 		id.setRecursionPerimeterMap(parentPerimeterMap);
 		id.run();
 		childDataSet.setIdentificationExists(true);
@@ -221,6 +225,7 @@ public class RecursionOperationModel extends OperationModel {
 		Sarn exSeg = controller.getExternalSegmentationMethod();
 		exSeg.initialize(maskedStack, childDataSet, progressBar);
 		exSeg.setBlur(new GaussianBlur(), controller.getGaussianBlurSigma());
+		exSeg.setCleanupParams(controller.getSearchFraction(), controller.getSearchCeiling(), controller.getSimplificationEpsilon());
 		exSeg.setParentPerimeterMap(parentPerimeterMap);
 		exSeg.run();
 		childDataSet.setExternalSegmentationExists(true);
@@ -265,6 +270,7 @@ public class RecursionOperationModel extends OperationModel {
 		Segmentation inSeg = controller.getInternalSegmentationMethod();
 		inSeg.initialize(maskedStack, childDataSet, progressBar);
 		inSeg.setBlur(new GaussianBlur(), controller.getGaussianBlurSigma());
+		inSeg.setCleanupParams(controller.getSearchFraction(), controller.getSearchCeiling(), controller.getSimplificationEpsilon());
 		inSeg.setSkipZeroBin(true);
 		inSeg.run();
 		childDataSet.setInternalSegmentationExists(true);
@@ -294,6 +300,12 @@ public class RecursionOperationModel extends OperationModel {
 	/**
 	 * Translates all child segment coordinates from cropped space back to full-image
 	 * space and accumulates child LinkSets into combinedDataSet.
+	 *
+	 * Segments are added to both the LinkSet list and the appropriate FrameSet so
+	 * that per-frame analysis on combinedDataSet works correctly.  Both
+	 * {@code internalPerimeter} (final void boundary after restricted segmentation)
+	 * and {@code externalPerimeter} (SARN pre-constriction envelope) are translated —
+	 * either or both may be null depending on which pipeline stages have run.
 	 */
 	private void translateAndAccumulate(LinkSet parentLinkSet) {
 		for (LinkSet childLinkSet : childDataSet.getLinkSetList()) {
@@ -302,6 +314,10 @@ public class RecursionOperationModel extends OperationModel {
 				if (cp != null) s.setCenterPoint(new Point(cp.x + minX, cp.y + minY));
 				offsetPerimeter(s.getInternalPerimeter(), minX, minY);
 				offsetPerimeter(s.getExternalPerimeter(), minX, minY);
+				int f = s.getFrame();
+				if (f >= 0 && f < combinedDataSet.getFrameSetList().length) {
+					combinedDataSet.getFrameSet(f).add(s);
+				}
 			}
 			combinedDataSet.addLinkSet(childLinkSet);
 			combinedDataSet.addChildParentMapping(childLinkSet, parentLinkSet);

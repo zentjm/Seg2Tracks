@@ -32,7 +32,8 @@ public class FloorPanel extends JPanel implements ActionListener, ChangeListener
 	JButton buttonRemovePanel = new JButton("Remove Panel");
 	JButton buttonAnalyzeMenu = new JButton ("DATA ANALYSIS >>");
 	JButton buttonSegmentationMenu = new JButton ("<< SEGMENTATION");
-	JButton buttonGenerateResults = new JButton ("GENERATE RESULTS");
+	JButton buttonGenerateResults  = new JButton("GENERATE RESULTS");
+	JLabel  resultsExportedLabel  = new JLabel("");
 
 	public FloorPanel(Seg2TracksController controller) {
 		this.controller = controller;
@@ -135,13 +136,16 @@ public class FloorPanel extends JPanel implements ActionListener, ChangeListener
         constraints.anchor = GridBagConstraints.LINE_END;
         add(buttonSegmentationMenu, constraints);
        
-        //Help button
         constraints.gridx = 3;
         constraints.anchor = GridBagConstraints.LINE_END;
         add(buttonGenerateResults, constraints);
-        
+
+        constraints.gridx = 4;
+        add(resultsExportedLabel, constraints);
+
         //Reset generate results menu button
         buttonGenerateResults.setEnabled(false);
+        resultsExportedLabel.setText("");
         
         //Reset progress bar
         progressBar.setValue(0);
@@ -165,7 +169,7 @@ public class FloorPanel extends JPanel implements ActionListener, ChangeListener
 		if (e.getSource() == buttonGenerateResults) {
 			controller.exportResults();
 			buttonGenerateResults.setEnabled(false);
-			//TODO: Message saying results have been generated. 
+			resultsExportedLabel.setText("Results exported.");
 		}
 		if (e.getSource() == buttonAddPanel) controller.addOperationPanel();
 		if (e.getSource() == buttonRemovePanel) controller.removeOperationPanel();

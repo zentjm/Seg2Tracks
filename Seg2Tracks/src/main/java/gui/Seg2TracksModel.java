@@ -14,8 +14,14 @@ public class Seg2TracksModel extends Observable {
 	
 	//Settings
 	Preferences preferences;
-	int operationPanels; 
+	int operationPanels;
 	int analysisPanels;
+
+	// Panel topology — parallel arrays indexed by display position.
+	// Populated by loadSettings() from Preferences written by Seg2TracksController.exitProgram().
+	int[]     panelOrderedPanelNums; // panelNumber used for per-panel Preferences keys
+	boolean[] panelIsRecursive;      // true → RecursionOperationModel; false → OperationModel
+	int[]     panelParentPositions;  // display-order index of parent panel (-1 if not recursive)
 	
 	ArrayList<OperationModel> operationModelList;
 	ArrayList<AnalysisModel> analysisModelList;
@@ -27,10 +33,21 @@ public class Seg2TracksModel extends Observable {
 		initialize();	
 	}
 	
-	//TODO: handle setting, loading, and saving multiple operation models.
+	// Load panel count, analysis count, and panel topology.
+	// Topology is written by Seg2TracksController.exitProgram(); defaults produce a single
+	// regular panel (correct behaviour on a clean first run).
 	public void loadSettings() {
 		operationPanels = preferences.getInt("OPERATION_PANEL_NUMBER", 1);
-		analysisPanels = preferences.getInt("ANALYSIS_PANEL_NUMBER", 1);	
+		analysisPanels  = preferences.getInt("ANALYSIS_PANEL_NUMBER", 1);
+
+		panelOrderedPanelNums = new int[operationPanels];
+		panelIsRecursive      = new boolean[operationPanels];
+		panelParentPositions  = new int[operationPanels];
+		for (int i = 0; i < operationPanels; i++) {
+			panelOrderedPanelNums[i] = preferences.getInt("PANEL_ORDER_PANELNUM" + i, i);
+			panelIsRecursive[i]      = preferences.getBoolean("PANEL_RECURSIVE" + i, false);
+			panelParentPositions[i]  = preferences.getInt("PANEL_PARENT_POS" + i, -1);
+		}
 	}
 	
 	//For saving all settings
@@ -41,17 +58,24 @@ public class Seg2TracksModel extends Observable {
 		
 	public void initialize() {
 
-		//System.out.println("loading settings");
 		operationModelList = new ArrayList<OperationModel>();
-		analysisModelList = new ArrayList<AnalysisModel>();
-		
-		//load the operationPanels
+		analysisModelList  = new ArrayList<AnalysisModel>();
+
+		// Create operation models in saved display order, using the saved panelNumber as
+		// the Preferences key so per-panel settings (input path, method selections, name
+		// etc.) are restored correctly.  Recursive panels get RecursionOperationModel;
+		// the parent-child wiring is done later by Seg2TracksController.loadOperationControllers().
 		for (int i = 0; i < operationPanels; i++) {
-			operationModelList.add(new OperationModel(i));
+			int pNum = panelOrderedPanelNums[i];
+			if (panelIsRecursive[i]) {
+				operationModelList.add(new RecursionOperationModel(pNum));
+			} else {
+				operationModelList.add(new OperationModel(pNum));
+			}
 		}
-		
+
 		for (int i = 0; i < analysisPanels; i++) {
-			analysisModelList.add(new AnalysisModel(i));	
+			analysisModelList.add(new AnalysisModel(i));
 		}
 	}
 	
@@ -66,6 +90,18 @@ public class Seg2TracksModel extends Observable {
 	public OperationModel addOperationModel() {
 		operationPanels ++;
 		OperationModel tempMod = new OperationModel(operationPanels - 1);
+		operationModelList.add(tempMod);
+		return tempMod;
+	}
+
+	/**
+	 * Creates a new RecursionOperationModel for a panel that was opened via the
+	 * Subsegment button.  The panel is already linked to its parent — no checkbox
+	 * or combobox selection is needed.
+	 */
+	public RecursionOperationModel addRecursionOperationModel() {
+		operationPanels++;
+		RecursionOperationModel tempMod = new RecursionOperationModel(operationPanels - 1);
 		operationModelList.add(tempMod);
 		return tempMod;
 	}
