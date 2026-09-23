@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# Claude Code local state and worktrees
+.claude/
+
+# Stray log4j output (from an old Windows-style log path)
+Seg2Tracks/C_/
+Seg2Tracks/C:*
+
+# Local notes, superseded by Seg2Tracks/CLAUDE.md
+Seg2Tracks/Seg2Tracks_Audit_Report.md
+Seg2Tracks/Seg2Tracks_Project_Context.md
