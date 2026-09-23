@@ -73,8 +73,14 @@ public class SARNtoSegmentationConversion extends Segmentation{
 	@Override
 	public void segmentation(FrameSet segments) {
 		for (int n = 0; n < segments.size(); n++) {
-			// Copy external boundary directly to internal perimeter (passthrough)
-			segments.get(n).setInternalPerimeter(segments.get(n).getExternalPerimeter());
+			// Copy external boundary to internal perimeter. Must be a deep copy:
+			// RecursionOperationModel.translateAndAccumulate() offsets both perimeters
+			// in place, so a shared array would be shifted twice.
+			Point[] external = segments.get(n).getExternalPerimeter();
+			if (external == null) continue;
+			Point[] internal = new Point[external.length];
+			for (int i = 0; i < external.length; i++) internal[i] = new Point(external[i]);
+			segments.get(n).setInternalPerimeter(internal);
 
 		}
 	}

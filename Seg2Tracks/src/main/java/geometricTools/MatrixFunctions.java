@@ -60,11 +60,20 @@ public class MatrixFunctions {
 	/**
 	 * Computes eigenvectors of the covariance matrix for a point cloud.
 	 * Performs PCA to find principal directions of variation.
+	 * <p>
+	 * Re-densifies {@code pointList} via {@link GeometricCalculations#straightPerimeter} first:
+	 * PCA treats every point as an equally-weighted sample, so if the input is a simplified
+	 * (e.g. Douglas-Peucker-reduced) boundary with dense corners and sparse straight runs, the
+	 * covariance — and therefore the computed axis — would skew toward whichever regions happen
+	 * to still have many points, independent of the shape's actual geometry. Densifying first
+	 * decouples the PCA input from however sparse the stored perimeter is.
 	 * @param pointList input points
 	 * @param eigenvector which eigenvector to return (0=primary, 1=secondary)
 	 * @return eigenvector as [x, y] direction components
 	 */
 	public double[] getEigenVectors (Point[] pointList, int eigenvector) {
+
+		pointList = GeometricCalculations.straightPerimeter(pointList);
 
 		// Convert points to 2D coordinate matrix
 		double[][] coords = new double[pointList.length][2];

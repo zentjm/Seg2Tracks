@@ -41,7 +41,16 @@ public abstract class Sarn {
 	DataSet dataSet;
 	GaussianBlur blurrer;
 	double blurSigma;
-	
+
+	// Boundary-cleanup parameters (removeLoops search-distance scaling + douglasPeucker
+	// tolerance), tunable per dataset via Boundary Cleanup Settings / Guided Calibration.
+	// Defaults match GeometricCalculations.DEFAULT_SIMPLIFICATION_EPSILON and the illustrative
+	// starting values documented in CLAUDE.md, used only if setCleanupParams() is never called
+	// (e.g. a Sarn subclass driven directly, outside the OperationController-wired pipeline).
+	double searchFraction = 0.15;
+	int searchCeiling = 400;
+	double epsilon = GeometricCalculations.DEFAULT_SIMPLIFICATION_EPSILON;
+
 	//Settings for import
 	JProgressBar progressBar;
 
@@ -102,6 +111,25 @@ public abstract class Sarn {
 	public void setBlur(GaussianBlur blurrer, double blurSigma) {
 		this.blurrer = blurrer;
 		this.blurSigma = blurSigma;
+	}
+
+	/**
+	 * Configures boundary-cleanup parameters used by {@link #computeSegmentPerimeter}: how
+	 * aggressively {@code removeLoops} searches for loop/revisit artifacts, and the
+	 * shape-fidelity tolerance for the {@code douglasPeucker} simplification pass that follows.
+	 *
+	 * @param searchFraction fraction of a contour's own point count used as removeLoops's
+	 *                        search-ahead window (replaces a flat constant so the search scales
+	 *                        with object size — see {@link #computeSegmentPerimeter})
+	 * @param searchCeiling  upper bound (in points) on the search window, regardless of
+	 *                        {@code searchFraction} — caps worst-case cost on very large contours
+	 * @param epsilon        perpendicular-distance tolerance (pixels) passed to
+	 *                        {@link GeometricCalculations#douglasPeucker}
+	 */
+	public void setCleanupParams(double searchFraction, int searchCeiling, double epsilon) {
+		this.searchFraction = searchFraction;
+		this.searchCeiling = searchCeiling;
+		this.epsilon = epsilon;
 	}
 
 	/**
@@ -198,7 +226,7 @@ public abstract class Sarn {
 	 * (5) stores the final SARN area in the segment.
 	 */
 	public void run() {
-		progressBar.setString("Segmentation");
+		if (progressBar != null) progressBar.setString("Segmentation");
 		// Iterate over all frames in the image stack
 		for (int i = 0; i < inputStack.size(); i ++) {
 			currentFrame = i;
@@ -210,80 +238,105 @@ public abstract class Sarn {
 			segments = dataSet.getFrameSet(i);
 			// Process each segment in the frame
 			for (int n = 0; n < segments.size(); n++) {
-				// Step 1: Establish initial inner and outer reference points.
-				// In recursive mode: use nearest other void center as the outer constraint,
-				// analogous to how non-recursive SARN uses the nearest neighboring cell center.
-				// If this is the only void in the parent (no sibling voids), fall back to the
-				// farthest parent perimeter point, analogous to the image-edge fallback in
-				// non-recursive mode. clip+stitch (step 5) contains the final perimeter.
-				Point [] innerPoints = innerPoints(n);
-				Point [] outerPoints;
+				Point[] perimeter = computeSegmentPerimeter(n);
+				// Step 5 (recursive mode only): clip perimeter to parent boundary and stitch
+				// gaps. removeLoops()/douglasPeucker() can create chords that exit the parent
+				// perimeter for non-convex cells (e.g. compressed toward a nearest neighbour).
 				if (parentPerimeterMap != null) {
-					Point nearestVoid = getNearestVoidCenter(innerPoints[0], n);
-					if (nearestVoid != null) {
-						outerPoints = new Point[]{ nearestVoid };
-					} else {
-						Point parentPt = getParentOuterPoint(innerPoints[0].x, innerPoints[0].y);
-						outerPoints = (parentPt != null) ? new Point[]{ parentPt } : outerPoints(innerPoints);
+					Point[] parentPerim = parentPerimeterMap.get(currentFrame);
+					if (parentPerim != null && parentPerim.length > 0) {
+						perimeter = clipAndStitch(perimeter, parentPerim, segments.get(n).getCenterPoint());
 					}
-				} else {
-					outerPoints = outerPoints(innerPoints);
 				}
-				// Step 2: Generate and clean boundary contours
-				Point [] innerBoundary = clean(innerBounds(innerPoints, outerPoints), segments.get(n));
-				Point [] outerBoundary = clean(outerBounds(innerBoundary, outerPoints), segments.get(n));
-				// Step 3: Match pairs and sample intensity along Bresenham lines
-				PointSet [] matchedPoints = boundaryMatch(innerBoundary, outerBoundary);
-				// Step 3.5 (recursive mode only): clip each matched outer point to 1 pixel
-				// inside the parent perimeter. This ensures contractor() operates within
-				// the masked region and the 1-pixel inset prevents getThreasholdPoint() from
-				// finding boundary-adjacent pixels (darkened by Gaussian blur zero-bleed)
-				// as the threshold point, which would place the SARN boundary at the parent
-				// perimeter instead of the void wall.
-				if (parentPerimeterMap != null) {
-					Point[] parentPerim3 = parentPerimeterMap.get(currentFrame);
-					if (parentPerim3 != null && parentPerim3.length > 0) {
-						int[] ppx3 = new int[parentPerim3.length], ppy3 = new int[parentPerim3.length];
-						for (int j = 0; j < parentPerim3.length; j++) { ppx3[j] = parentPerim3[j].x; ppy3[j] = parentPerim3[j].y; }
-						PolygonRoi parentRoi3 = new PolygonRoi(ppx3, ppy3, parentPerim3.length, Roi.POLYGON);
-						for (int pi = 0; pi < matchedPoints.length; pi++) {
-							if (!parentRoi3.contains(matchedPoints[pi].outerPoint.x, matchedPoints[pi].outerPoint.y)) {
-								Point[] line3 = bresenham(matchedPoints[pi].innerPoint, matchedPoints[pi].outerPoint);
-								for (int li = line3.length - 1; li >= 0; li--) {
-									if (parentRoi3.contains(line3[li].x, line3[li].y)) {
-										// Inset 1 pixel from boundary so contractor finds threshold
-										// points inside the polygon, not on the edge where contains()
-										// is unreliable after geometric refinements.
-										int insetIdx = Math.max(0, li - 1);
-										matchedPoints[pi] = new PointSet(matchedPoints[pi].innerPoint, line3[insetIdx]);
-										break;
-									}
-								}
+				segments.get(n).setExternalPerimeter(perimeter);
+			}
+			// Update progress bar with current frame index
+			if (progressBar != null) progressBar.setValue(i);
+		}
+	}
+
+	/**
+	 * Computes the refined SARN perimeter for one segment in the current frame — steps 1–4 of
+	 * {@link #run()}: establishes the inner/outer reference points (using the recursive-mode
+	 * nearest-sibling-void / parent-boundary outer constraint when {@link #parentPerimeterMap} is
+	 * set), generates and cleans the boundary contours, matches them into Bresenham paths (clipping
+	 * matched points to the parent boundary in recursive mode), finds the restriction points via
+	 * {@link #contractor}, and applies the standard geometric refinement pipeline.
+	 * <p>
+	 * Does <b>not</b> clip the result to the parent boundary ({@link #clipAndStitch}, step 5) or
+	 * store it on the segment — both are left to the caller. This lets {@code run()} apply them
+	 * immediately, while {@link MultiWayReductionContraction} can call this method to get every
+	 * cell's unclipped baseline perimeter for its own sector-refinement pass before clipping the
+	 * final (refined) result once, at the end.
+	 *
+	 * @param n segment index in the current frame
+	 * @return the refined (but not yet parent-clipped) perimeter for segment {@code n}
+	 */
+	protected Point[] computeSegmentPerimeter(int n) {
+		// Step 1: Establish initial inner and outer reference points.
+		// In recursive mode: use nearest other void center as the outer constraint,
+		// analogous to how non-recursive SARN uses the nearest neighboring cell center.
+		// If this is the only void in the parent (no sibling voids), fall back to the
+		// farthest parent perimeter point, analogous to the image-edge fallback in
+		// non-recursive mode. clip+stitch (step 5, in run()) contains the final perimeter.
+		Point [] innerPoints = innerPoints(n);
+		Point [] outerPoints;
+		if (parentPerimeterMap != null) {
+			Point nearestVoid = getNearestVoidCenter(innerPoints[0], n);
+			if (nearestVoid != null) {
+				outerPoints = new Point[]{ nearestVoid };
+			} else {
+				Point parentPt = getParentOuterPoint(innerPoints[0].x, innerPoints[0].y);
+				outerPoints = (parentPt != null) ? new Point[]{ parentPt } : outerPoints(innerPoints);
+			}
+		} else {
+			outerPoints = outerPoints(innerPoints);
+		}
+		// Step 2: Generate and clean boundary contours
+		Point [] innerBoundary = clean(innerBounds(innerPoints, outerPoints), segments.get(n));
+		Point [] outerBoundary = clean(outerBounds(innerBoundary, outerPoints), segments.get(n));
+		// Step 3: Match pairs and sample intensity along Bresenham lines
+		PointSet [] matchedPoints = boundaryMatch(innerBoundary, outerBoundary);
+		// Step 3.5 (recursive mode only): clip each matched outer point to 1 pixel
+		// inside the parent perimeter. This ensures contractor() operates within
+		// the masked region and the 1-pixel inset prevents getThreasholdPoint() from
+		// finding boundary-adjacent pixels (darkened by Gaussian blur zero-bleed)
+		// as the threshold point, which would place the SARN boundary at the parent
+		// perimeter instead of the void wall.
+		if (parentPerimeterMap != null) {
+			Point[] parentPerim3 = parentPerimeterMap.get(currentFrame);
+			if (parentPerim3 != null && parentPerim3.length > 0) {
+				int[] ppx3 = new int[parentPerim3.length], ppy3 = new int[parentPerim3.length];
+				for (int j = 0; j < parentPerim3.length; j++) { ppx3[j] = parentPerim3[j].x; ppy3[j] = parentPerim3[j].y; }
+				PolygonRoi parentRoi3 = new PolygonRoi(ppx3, ppy3, parentPerim3.length, Roi.POLYGON);
+				for (int pi = 0; pi < matchedPoints.length; pi++) {
+					if (!parentRoi3.contains(matchedPoints[pi].outerPoint.x, matchedPoints[pi].outerPoint.y)) {
+						Point[] line3 = bresenham(matchedPoints[pi].innerPoint, matchedPoints[pi].outerPoint);
+						for (int li = line3.length - 1; li >= 0; li--) {
+							if (parentRoi3.contains(line3[li].x, line3[li].y)) {
+								// Inset 1 pixel from boundary so contractor finds threshold
+								// points inside the polygon, not on the edge where contains()
+								// is unreliable after geometric refinements.
+								int insetIdx = Math.max(0, li - 1);
+								matchedPoints[pi] = new PointSet(matchedPoints[pi].innerPoint, line3[insetIdx]);
+								break;
 							}
 						}
 					}
 				}
-				// Step 4: Find restriction points
-				Point[] contractorResult = contractor(matchedPoints);
-				Point[] perimeter =
-						GeometricCalculations.straightPerimeter(
-						GeometricCalculations.shortcutPerimeter(
-						GeometricCalculations.straightPerimeter(
-						contractorResult)));
-				// Step 5 (recursive mode only): clip perimeter to parent boundary and stitch
-				// gaps. shortcutPerimeter() can create chords that exit the parent perimeter
-				// for non-convex cells (e.g. compressed toward a nearest neighbour).
-				if (parentPerimeterMap != null) {
-					Point[] parentPerim = parentPerimeterMap.get(currentFrame);
-					if (parentPerim != null && parentPerim.length > 0) {
-						perimeter = clipAndStitch(perimeter, parentPerim, innerBoundary[0]);
-					}
-				}
-				segments.get(n).setExternalPerimeter(perimeter);	
 			}
-			// Update progress bar with current frame index
-			progressBar.setValue(i);
 		}
+		// Step 4: Find restriction points
+		Point[] contractorResult = contractor(matchedPoints);
+		Point[] densified = GeometricCalculations.straightPerimeter(contractorResult);
+		int searchDistance = GeometricCalculations.scaledSearchDistance(densified.length, searchFraction, searchCeiling);
+		return GeometricCalculations.straightPerimeter(
+				GeometricCalculations.douglasPeucker(
+				GeometricCalculations.removeLoops(
+				densified, searchDistance,
+				GeometricCalculations.LOOP_REMOVAL_RANGE,
+				GeometricCalculations.LOOP_REMOVAL_SMOOTHING),
+				epsilon));
 	}
 
 	/**
@@ -581,7 +634,12 @@ public abstract class Sarn {
 	 * 
 	 */
 
-	//Inputs: blured processor, cell1, cell2
+	/**
+	 * INCOMPLETE STUB — always returns null.
+	 * Intended to merge overlapping segments within a FrameSet; intermediate overlap
+	 * computation is present but the merging logic is not yet implemented.
+	 * Will be completed as part of the Split command implementation.
+	 */
 	public FrameSet consolidate(ImageProcessor processor, FrameSet segments) {
 		
 		//TODO: make adjustable

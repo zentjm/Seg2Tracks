@@ -46,6 +46,13 @@ public class Identification {
 	// In recursive mode: frame→perimeter map for bounding the maxima scan to each parent cell
 	HashMap<Integer, Point[]> recursionPerimeterMap = null;
 
+	/**
+	 * Fraction of the image intensity range used as the peak-separation tolerance in
+	 * recursive mode. Stored as a percent (e.g. 10.0 = 10%); divided by 100 at use.
+	 * Corresponds to the "Recursive Tolerance (%)" field in Object ID Settings.
+	 */
+	double recursiveTolerancePct = 10.0;
+
 	// Status tracking UI
 	JProgressBar progressBar; // Visual feedback for processing progress
 
@@ -101,6 +108,17 @@ public class Identification {
 	public void setRecursionPerimeterMap(HashMap<Integer, Point[]> map) {
 		this.recursionPerimeterMap = map;
 	}
+
+	/**
+	 * Sets the peak-separation tolerance used in recursive mode as a percentage of the
+	 * image intensity range (e.g. pass 10.0 for 10%).  Corresponds to the
+	 * "Recursive Tolerance (%)" field in Object ID Settings.
+	 *
+	 * @param pct percentage of the intensity range, typically 5–20
+	 */
+	public void setRecursiveTolerancePct(double pct) {
+		this.recursiveTolerancePct = pct;
+	}
 	
 	/**
 	 * Process entire image stack to detect cell markers. For each frame:
@@ -108,7 +126,7 @@ public class Identification {
 	 * and creates Segment objects at detected positions.
 	 */
 	public void run() {
-		progressBar.setString("Identification");
+		if (progressBar != null) progressBar.setString("Identification");
 		ImageProcessor tempProcessor;
 		
 		Polygon poly; // Array of (x, y) coordinates for detected maxima
@@ -144,8 +162,11 @@ public class Identification {
 			// In recursive mode, compute tolerance as 10% of the image intensity range so
 			// analyzeAndMarkMaxima can distinguish separate void peaks even when the blurred
 			// image contains a connected plateau of equal-valued pixels.
-			// TODO: expose this as a user-overridable parameter in Object ID Settings (pre-v1.0).
-			// For non-recursive mode, keep tolerance=0 (existing behaviour for primary segmentation).
+			// Non-recursive mode: tolerance=0 (all local maxima are candidates;
+			// filterLowPoints() applies the user's Threshold setting separately).
+			// Recursive mode: use a fraction of the intensity range to separate
+			// adjacent void peaks that may sit on a connected intensity plateau.
+			// The fraction is user-controlled via "Recursive Tolerance (%)" in Object ID Settings.
 			double tolerance = 0;
 			if (recursionPerimeterMap != null) {
 				float gMin = Float.MAX_VALUE, gMax = -Float.MAX_VALUE;
@@ -156,7 +177,7 @@ public class Identification {
 						if (v > gMax) gMax = v;
 					}
 				}
-				tolerance = (gMax - gMin) * 0.1;
+				tolerance = (gMax - gMin) * (recursiveTolerancePct / 100.0);
 			}
 
 			// Find all local maxima. Tolerance is 0 in primary mode; image-range-derived in
@@ -172,7 +193,7 @@ public class Identification {
 				frameSet.add(new Segment(i, new Point(poly.xpoints[j], poly.ypoints[j])));
 			}
 			dataSet.addFrameSet(frameSet, i);
-			progressBar.setValue(i);
+			if (progressBar != null) progressBar.setValue(i);
 		}
 	}
 	
@@ -323,6 +344,9 @@ public class Identification {
 			if (!segment.isManuallyEdited()) {
 				continue;
 			}
+			// Skip segments with no external perimeter (can occur for manually-created segments
+			// that were never passed through SARN)
+			if (segment.getExternalPerimeter() == null) continue;
 			// Collect all re-detected peaks that fall within this segment's outline
 			ArrayList<Point> matches = new ArrayList<Point>();
 			Roi poly = GeometricCalculations.getPolygonRoi(segment.getExternalPerimeter());
@@ -336,8 +360,6 @@ public class Identification {
 
 			// Case 1: No detected peak falls on the perimeter — find brightest point in entire segment area
 			if (matches.size() == 0) {
-				//System.out.println("No identification match");
-
 				int maxIntensity = 0;
 				Point areaPointList[] = GeometricCalculations.getAreaByRoi(segment.getExternalPerimeter());
 				for (int i = 0; i < areaPointList.length; i++) {
@@ -347,6 +369,10 @@ public class Identification {
 						centerPoint = areaPointList[i];
 					}
 				}
+				// If every pixel was at the image edge (kernelIntensity returns -1 for all),
+				// centerPoint stays null. Fall back to the segment's existing center rather
+				// than nulling it out and breaking downstream code.
+				if (centerPoint == null) centerPoint = segment.getCenterPoint();
 			}
 
 			// Case 2: Multiple detected peaks match — pick the brightest one

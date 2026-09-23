@@ -49,6 +49,13 @@ public abstract class Segmentation {
 	GaussianBlur blurrer; // Gaussian blur filter for pre-processing
 	double blurSigma; // Blur kernel standard deviation parameter
 
+	// Boundary-cleanup parameters (removeLoops search-distance scaling + douglasPeucker
+	// tolerance), tunable per dataset via Boundary Cleanup Settings / Guided Calibration.
+	// See sarn.Sarn's identical fields/setter for the full rationale.
+	double searchFraction = 0.15;
+	int searchCeiling = 400;
+	double epsilon = GeometricCalculations.DEFAULT_SIMPLIFICATION_EPSILON;
+
 	// Status tracking
 	JProgressBar progress; // UI progress bar for user feedback
 
@@ -84,6 +91,21 @@ public abstract class Segmentation {
 	public void setBlur(GaussianBlur blurrer, double blurSigma) {
 		this.blurrer = blurrer;
 		this.blurSigma = blurSigma;
+	}
+
+	/**
+	 * Configures boundary-cleanup parameters used by {@code extractInternalPerimeter}. See
+	 * {@link sarn.Sarn#setCleanupParams} for the full rationale — identical parameters, applied
+	 * to the internal-perimeter pipeline instead of the external (SARN) one.
+	 * @param searchFraction fraction of a contour's own point count used as removeLoops's
+	 *                        search-ahead window
+	 * @param searchCeiling  upper bound (in points) on the search window
+	 * @param epsilon        perpendicular-distance tolerance (pixels) for douglasPeucker
+	 */
+	public void setCleanupParams(double searchFraction, int searchCeiling, double epsilon) {
+		this.searchFraction = searchFraction;
+		this.searchCeiling = searchCeiling;
+		this.epsilon = epsilon;
 	}
 
 	/**
@@ -193,12 +215,18 @@ public abstract class Segmentation {
 			Point[] points = new Point[wand.npoints];
 			for (int i = 0; i < wand.npoints; i++) points[i] = new Point(wand.xpoints[i], wand.ypoints[i]);
 
-			// Smooth perimeter: straighten → shortcut collinear runs → straighten again
+			// Smooth perimeter: straighten → remove loops → simplify (Douglas-Peucker) → straighten again
+			Point[] densifiedInternal = GeometricCalculations.straightPerimeter(points);
+			int internalSearchDistance = GeometricCalculations.scaledSearchDistance(
+					densifiedInternal.length, searchFraction, searchCeiling);
 			segments.get(n).setInternalPerimeter(
 				GeometricCalculations.straightPerimeter(
-				GeometricCalculations.shortcutPerimeter(
-				GeometricCalculations.straightPerimeter(
-								points))));
+				GeometricCalculations.douglasPeucker(
+				GeometricCalculations.removeLoops(
+				densifiedInternal, internalSearchDistance,
+				GeometricCalculations.LOOP_REMOVAL_RANGE,
+				GeometricCalculations.LOOP_REMOVAL_SMOOTHING),
+				epsilon)));
 			clean(segments.get(n)); // Flag any boundary-contact segments
 		}
 	}
@@ -258,12 +286,18 @@ public abstract class Segmentation {
 
 			//System.out.println("Segment frame count: " + segments.size() + "  Current segment: " + n);
 
-			// Smooth perimeter: straighten → shortcut collinear runs → straighten again
+			// Smooth perimeter: straighten → remove loops → simplify (Douglas-Peucker) → straighten again
+			Point[] densifiedInternal = GeometricCalculations.straightPerimeter(points);
+			int internalSearchDistance = GeometricCalculations.scaledSearchDistance(
+					densifiedInternal.length, searchFraction, searchCeiling);
 			segments.get(n).setInternalPerimeter(
 				GeometricCalculations.straightPerimeter(
-				GeometricCalculations.shortcutPerimeter(
-				GeometricCalculations.straightPerimeter(
-								points))));
+				GeometricCalculations.douglasPeucker(
+				GeometricCalculations.removeLoops(
+				densifiedInternal, internalSearchDistance,
+				GeometricCalculations.LOOP_REMOVAL_RANGE,
+				GeometricCalculations.LOOP_REMOVAL_SMOOTHING),
+				epsilon)));
 			clean(segments.get(n)); // Flag any boundary-contact segments
 		}
 	}

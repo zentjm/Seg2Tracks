@@ -332,11 +332,6 @@ public class GeometricCalculations {
 		int maxX = -1;
 		int maxY = -1;
 		
-		if (pointList == null) {
-		 System.out.println("pointList is null");
-		}
-		else  System.out.println("pointList is NOT null");
-		
 		float[] xPoints = new float[pointList.length];
 		float[] yPoints = new float[pointList.length];
 		for (int i = 0; i < pointList.length; i ++) {
@@ -509,56 +504,104 @@ public class GeometricCalculations {
 		return null;
 	}
 	
+	/** Perpendicular-distance-from-chord tolerance (pixels) used by {@link #douglasPeucker}
+	 * in the default perimeter-generation pipeline. A pixel-connected (post-{@link
+	 * #straightPerimeter}) contour has consecutive points at most sqrt(2) apart; this sits
+	 * just above that, removing Bresenham staircase/aliasing noise without erasing genuine
+	 * small-scale contour features. Distinct in kind from the old {@code shortcutPerimeter}
+	 * "smoothing" radius (a proximity-collapse distance between two vertices) — do not
+	 * conflate the two when tuning. */
+	public static final double DEFAULT_SIMPLIFICATION_EPSILON = 1.5;
+
+	/** Lower bound (points) on the {@code removeLoops} search-ahead window computed by {@link
+	 * #scaledSearchDistance}, regardless of how small {@code searchFraction * pts.length} is.
+	 * Not user-tunable — keeps small-contour behaviour close to the old flat-100 default, since
+	 * the {@code size/2} wraparound clamp inside {@code removeLoops} already dominates for any
+	 * contour under ~200 points. */
+	public static final int SEARCH_DISTANCE_FLOOR = 60;
+
+	/** {@code range} passed to {@code removeLoops} by the default generation pipeline: minimum
+	 * index spacing before two points are compared for a revisit. Not user-tunable. */
+	public static final int LOOP_REMOVAL_RANGE = 2;
+
+	/** {@code smoothing} passed to {@code removeLoops} by the default generation pipeline:
+	 * Euclidean proximity threshold for revisit detection. Not user-tunable — see the Javadoc on
+	 * {@link #removeLoops(Point[], int, int, int)} for why this specific value was chosen. */
+	public static final int LOOP_REMOVAL_SMOOTHING = 2;
+
 	/**
-	 * Simplifies a contour by removing redundant points via shortcut detection.
-	 * Filters very small contours (<200 points).
-	 * @param pts input contour points
-	 * @return simplified contour
+	 * Computes the {@code removeLoops} search-ahead window as a fraction of the contour's own
+	 * point count, clamped to {@code [SEARCH_DISTANCE_FLOOR, searchCeiling]}. Replaces a flat
+	 * constant so the window scales with object size: a fixed value tuned for a small
+	 * subsegmentation void perimeter under-searches on a large external cell envelope, and one
+	 * tuned for large cells over-searches (wastefully) on small ones. The {@code size/2}
+	 * wraparound-safety clamp inside {@code removeLoops} still applies on top of this — this
+	 * method does not need to (and must not) account for it itself.
+	 * @param pointCount number of points in the contour being cleaned
+	 * @param searchFraction fraction of {@code pointCount} to search ahead
+	 * @param searchCeiling upper bound on the search window, regardless of {@code searchFraction}
+	 * @return search-ahead window in points, for use as {@code removeLoops}'s {@code searchDistance}
 	 */
-	public static Point[] shortcutPerimeter (Point[] pts) {
-		
-		//Check for no points
-		if (pts.length == 0) {
-			//System.out.println("This pointlist has no points");
-			return pts; //deals with null arrays 
-		}
-		
-		//Returns if just a couple of points have been found //TODO: Really important
-		if (pts.length < 200) {
-			return pts;
-		}
-		
-		//return pts;
-		return  shortcutPerimeter(pts, 100, 2, 2, 4);
+	public static int scaledSearchDistance (int pointCount, double searchFraction, int searchCeiling) {
+		int scaled = (int) Math.round(pointCount * searchFraction);
+		return Math.max(SEARCH_DISTANCE_FLOOR, Math.min(searchCeiling, scaled));
 	}
-	
+
 	/**
-	 * Advanced perimeter simplification using adjustable search parameters.
-	 * Detects and removes redundant contour points using spatial proximity.
+	 * Removes loop/revisit artifacts from a contour by collapsing any run of points between
+	 * two vertices that have drifted back within {@code smoothing} pixels of each other.
+	 * Not gated on a minimum point count — small contours (e.g. recursive/subsegmentation
+	 * void perimeters) are processed too; the search window adapts to the list size, so this
+	 * is safe at any size.
 	 * @param pts input contour points
-	 * @param searchDistance how far ahead to look for shortcuts
-	 * @param range minimum spacing before checking for shortcuts
-	 * @param smoothing pixel distance threshold for shortcut detection
-	 * @param minimumSize stop simplifying if smaller than this
-	 * @return simplified contour
+	 * @return contour with loop artifacts collapsed
 	 */
-	public static Point[] shortcutPerimeter (Point[] pts, int searchDistance, int range, int smoothing, int minimumSize) {
-		//System.out.println("Running Shortcut");
-		
-		
-		
+	public static Point[] removeLoops (Point[] pts) {
+
 		//Check for no points
 		if (pts.length == 0) {
 			//System.out.println("This pointlist has no points");
-			return pts; //deals with null arrays 
+			return pts; //deals with null arrays
 		}
-		
-		//Returns if just a couple of points have been found //TODO: expand
-		if (pts.length < 50) {
-			return pts;
+
+		return removeLoops(pts, 100, 2, 2);
+	}
+
+	/**
+	 * Removes loop/revisit artifacts using adjustable search parameters.
+	 * Detects and collapses redundant contour points using spatial proximity (squared Euclidean
+	 * distance, not Manhattan — Manhattan distance is anisotropic: it counted an orthogonal
+	 * neighbour as "close" but never a diagonal one at the same pixel distance). The default
+	 * {@code smoothing = 2} (squared-distance {@code < 4}) is the isotropic equivalent of the old
+	 * Manhattan-distance-{@code < 2} check — both resolve to "the 8-connected pixel neighbourhood,"
+	 * just without the old axis bias. Do not raise this default without empirical testing: a
+	 * larger radius (e.g. the literal Euclidean-distance-3 first suggested for this fix) also
+	 * matches ordinary curvature on any smooth boundary, not just genuine loop/revisit artifacts,
+	 * and will collapse valid perimeters that have no defect at all.
+	 * <p>
+	 * No minimum-size gate: the inner search window is clamped to the current (possibly shrinking)
+	 * list size on every outer-loop pass, so a fixed {@code searchDistance} larger than the list
+	 * can never wrap around and spuriously compare a point to its own near-neighbour (which, on a
+	 * densely-connected perimeter, is always "close" and would otherwise be misread as a shortcut,
+	 * deleting most of the contour). Loop removal alone has no reason to bail out early once the
+	 * list shrinks (unlike the old conflated {@code shortcutPerimeter}, whose {@code minimumSize}
+	 * guard existed only to protect its incidental point-count-reduction side effect), so this
+	 * method has no such early exit.
+	 * @param pts input contour points
+	 * @param searchDistance how far ahead to look for a revisit (clamped to the list size)
+	 * @param range minimum spacing before checking for a revisit
+	 * @param smoothing pixel distance threshold for revisit detection (Euclidean)
+	 * @return contour with loop artifacts collapsed
+	 */
+	public static Point[] removeLoops (Point[] pts, int searchDistance, int range, int smoothing) {
+		//System.out.println("Running removeLoops");
+
+		//Check for no points
+		if (pts.length == 0) {
+			//System.out.println("This pointlist has no points");
+			return pts; //deals with null arrays
 		}
-		
-		
+
 		//Convert to arrayList
 		ArrayList<Point> ptsList = new ArrayList<Point>();
 		for (int i = 0; i < pts.length; i ++) {
@@ -580,26 +623,38 @@ public class GeometricCalculations {
 			}	
 			
 			Point pt1 = ptsList.get(index1);
-			
+
 			//Point pt1 = ptsList.get(index1 + i < ptsList.size() - 1 ? index1 + i : index1 + i - ptsList.size() + 1);
-			
+
 			//Point pt1 = ptsList.get(index1);
-		
+
+			// Clamp the search window to half the current list size (recomputed every pass, since
+			// the list shrinks as shortcuts are applied). Must stop at the halfway point, not just
+			// "less than the list size": index2's wraparound arithmetic below walks backward past
+			// index1 once j exceeds size, so a bound of size-1 (or anything close to size) still
+			// lets index2 wrap around and land back adjacent to index1 from the other side — which
+			// is always "close" on a dense perimeter and would be misread as a shortcut spanning
+			// nearly the whole contour. Capping at size/2 means the search never goes past the
+			// antipodal point in either direction, so it can never wrap back near its own start.
+			int maxJ = Math.min(searchDistance, ptsList.size() / 2);
+
 			//search ahead for shortcuts
-			for (int j = range; j < searchDistance; j++) {
+			for (int j = range; j < maxJ; j++) {
 				index2 = (index1 + j < ptsList.size() -1) ? index1 + j : index1 + j - ptsList.size() + 1;
 				Point pt2 = ptsList.get(index2);
-				
+
 				//System.out.println("Point 1 at i =" + i + "  index1: " + index1 + " xy: " + pt1.x + "," + pt1.y +
 				//		"    Point 2 at j =" + j + "  index2: " + index2 + " xy: " + pt2.x + "," + pt2.y );
-						
-					
-			
+
+
+
 				//System.out.println("index1:" + index1 + "   index2:" + index2);
-				
+
 				//check if a shortcut is found
 				//if (index2 - index1 > 2 ) { //list adjacency check
-					if (Math.abs(pt1.x - pt2.x) + Math.abs(pt1.y - pt2.y) < smoothing) { //spatial check for left, right, up, or down
+					int dx = pt1.x - pt2.x;
+					int dy = pt1.y - pt2.y;
+					if (dx * dx + dy * dy < smoothing * smoothing) { //Euclidean spatial proximity check
 						
 						//System.out.println("HIT!!!    Point 1 at i =" + i + "  index1: " + index1 + " xy: " + pt1.x + "," + pt1.y +
 						//"    Point 2 at j =" + j + "  index2: " + index2 + " xy: " + pt2.x + "," + pt2.y );
@@ -641,7 +696,6 @@ public class GeometricCalculations {
 					//System.out.println("ptsList length is: " + ptsList.size());
 			}
 			//System.out.println("Index:" + index1 + "    PtsList size is:" + ptsList.size());
-			if (ptsList.size() < minimumSize) break;
 		}
 		
 	
@@ -661,12 +715,93 @@ public class GeometricCalculations {
 		
 		return newPts;
 	}
+
+	/**
+	 * Simplifies a contour to a deliberate point-count/fidelity tradeoff using the
+	 * Ramer-Douglas-Peucker algorithm: recursively finds the point that deviates furthest
+	 * (perpendicular distance) from the chord connecting the current run's endpoints, keeps it
+	 * and recurses on both halves if that deviation exceeds {@code epsilon}, otherwise collapses
+	 * the whole run to just its two endpoints. Every point removed is guaranteed to lie within
+	 * {@code epsilon} pixels of the simplified boundary, so callers that only need polygon shape
+	 * (area, overlap, containment) are unaffected by how aggressively this reduces point count.
+	 * Callers that need per-point density (e.g. unweighted PCA in {@code MatrixFunctions}) must
+	 * re-densify via {@link #straightPerimeter} first — this method intentionally does not
+	 * preserve density, only shape.
+	 * <p>
+	 * Treats {@code pts} as an open chain (endpoints at index 0 and length-1 are always kept);
+	 * closing the contour (connecting the last retained point back to the first) is the caller's
+	 * responsibility, exactly as the existing pipeline already does via a trailing {@link
+	 * #straightPerimeter} call.
+	 * @param pts input contour points
+	 * @param epsilon perpendicular-distance tolerance in pixels
+	 * @return simplified contour
+	 */
+	public static Point[] douglasPeucker (Point[] pts, double epsilon) {
+		if (pts.length < 3) return pts;
+
+		int index = -1;
+		double maxDist = 0;
+		Point first = pts[0];
+		Point last = pts[pts.length - 1];
+		for (int i = 1; i < pts.length - 1; i++) {
+			double dist = perpendicularDistance(pts[i], first, last);
+			if (dist > maxDist) {
+				maxDist = dist;
+				index = i;
+			}
+		}
+
+		if (maxDist > epsilon) {
+			Point[] leftPart = Arrays.copyOfRange(pts, 0, index + 1);
+			Point[] rightPart = Arrays.copyOfRange(pts, index, pts.length);
+			Point[] left = douglasPeucker(leftPart, epsilon);
+			Point[] right = douglasPeucker(rightPart, epsilon);
+
+			Point[] result = new Point[left.length + right.length - 1];
+			System.arraycopy(left, 0, result, 0, left.length - 1);
+			System.arraycopy(right, 0, result, left.length - 1, right.length);
+			return result;
+		} else {
+			return new Point[] { first, last };
+		}
+	}
+
+	/**
+	 * Perpendicular distance from point {@code p} to the infinite line through {@code a} and
+	 * {@code b} (or the Euclidean distance to {@code a} if {@code a} and {@code b} coincide).
+	 */
+	private static double perpendicularDistance (Point p, Point a, Point b) {
+		if (a.equals(b)) return a.distance(p);
+		double num = Math.abs((b.x - a.x) * (a.y - p.y) - (a.x - p.x) * (b.y - a.y));
+		return num / a.distance(b);
+	}
+
+	/**
+	 * Sums the Euclidean distance between every consecutive pair of points in a closed contour,
+	 * including the wraparound segment from the last point back to the first (consistent with
+	 * how {@link #straightPerimeter} closes a contour). Used as the true geometric perimeter
+	 * length, decoupled from how many points happen to represent the boundary — unlike raw point
+	 * count, this is stable across changes to simplification parameters such as {@link
+	 * #DEFAULT_SIMPLIFICATION_EPSILON}.
+	 * @param pts contour points
+	 * @return total arc length in pixels
+	 */
+	public static double arcLength (Point[] pts) {
+		if (pts.length < 2) return 0.0;
+		double sum = 0.0;
+		for (int i = 1; i < pts.length; i++) {
+			sum += pts[i - 1].distance(pts[i]);
+		}
+		sum += pts[pts.length - 1].distance(pts[0]);
+		return sum;
+	}
+
 		//--------
-		
+
 		/*
 		//System.out.println("Starting SHORTCUT...");
-		
-	
+
+
 		if (pts.length == 0) {
 			//System.out.println("This pointlist has no points");
 			return pts; //deals with null arrays 
