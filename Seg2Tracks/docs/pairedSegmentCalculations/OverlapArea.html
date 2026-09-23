@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OverlapArea — Seg2Tracks API</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 14px; color: #1a1a2e; background: #f8f9fa; }
+a { color: #0066cc; text-decoration: none; }
+a:hover { text-decoration: underline; color: #004499; }
+
+/* Nav sidebar */
+#nav { position: fixed; top: 0; left: 0; width: 260px; height: 100vh; background: #1a1a2e;
+       overflow-y: auto; padding: 0 0 20px 0; z-index: 100; }
+#nav h2 { background: #16213e; color: #e0e0e0; padding: 16px 18px; font-size: 13px;
+          text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid #0f3460; }
+#nav .pkg { padding: 8px 18px 4px; font-size: 11px; color: #7a8db5; text-transform: uppercase;
+            letter-spacing: 0.8px; margin-top: 8px; }
+#nav ul { list-style: none; }
+#nav ul li a { display: block; padding: 4px 18px 4px 28px; color: #c0cce0; font-size: 13px; }
+#nav ul li a:hover, #nav ul li a.active { background: #0f3460; color: #fff; text-decoration: none; }
+
+/* Main content */
+#main { margin-left: 260px; padding: 32px 40px; max-width: 1100px; }
+#main h1 { font-size: 26px; color: #1a1a2e; margin-bottom: 6px; border-bottom: 3px solid #0066cc; padding-bottom: 8px; }
+#main .subtitle { color: #555; margin-bottom: 28px; font-size: 14px; }
+#main h2 { font-size: 18px; color: #1a1a2e; margin: 28px 0 10px; border-left: 4px solid #0066cc; padding-left: 10px; }
+#main h3 { font-size: 15px; color: #333; margin: 20px 0 6px; }
+
+/* Class doc card */
+.class-card { background: #fff; border: 1px solid #dde; border-radius: 6px;
+              padding: 20px 24px; margin-bottom: 16px; }
+.class-card .class-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.class-card .class-name { font-size: 18px; font-weight: 700; color: #1a1a2e; }
+.class-card .class-kind { font-size: 11px; background: #e8f0fe; color: #1a56c4; border-radius: 4px;
+                           padding: 2px 7px; font-weight: 600; text-transform: uppercase; }
+.class-card .class-kind.abstract { background: #fce8ff; color: #8e24aa; }
+.class-card .class-kind.interface { background: #e8fce8; color: #1b7a1b; }
+.class-card .package-label { font-size: 12px; color: #888; }
+.class-card .class-doc { color: #333; line-height: 1.6; margin-bottom: 12px; }
+
+/* Method table */
+.method-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+.method-table th { background: #f0f4ff; text-align: left; padding: 7px 12px; font-size: 12px;
+                   color: #555; border-bottom: 2px solid #dde; text-transform: uppercase; letter-spacing: 0.5px; }
+.method-table td { padding: 8px 12px; border-bottom: 1px solid #eef; vertical-align: top; font-size: 13px; }
+.method-table tr:hover td { background: #f8f9ff; }
+.method-sig { font-family: 'Consolas', 'Courier New', monospace; color: #1a1a2e; font-size: 12px; font-weight: 600; }
+.method-doc { color: #444; line-height: 1.5; }
+.tag-bug { display: inline-block; background: #ffe0e0; color: #c62828; border-radius: 3px;
+           padding: 2px 6px; font-size: 11px; font-weight: 700; margin-right: 4px; }
+.tag-stub { display: inline-block; background: #fff3cd; color: #856404; border-radius: 3px;
+            padding: 2px 6px; font-size: 11px; font-weight: 700; margin-right: 4px; }
+.tag-dead { display: inline-block; background: #e8e8e8; color: #666; border-radius: 3px;
+            padding: 2px 6px; font-size: 11px; font-weight: 700; margin-right: 4px; }
+
+/* Bug/stub/status pills on class header */
+.pill { display: inline-block; border-radius: 12px; padding: 2px 10px; font-size: 11px;
+        font-weight: 700; margin-left: 4px; }
+.pill-bug { background: #ffe0e0; color: #c62828; }
+.pill-stub { background: #fff3cd; color: #856404; }
+
+/* Index page */
+.pkg-section { background: #fff; border: 1px solid #dde; border-radius: 6px;
+               padding: 16px 20px; margin-bottom: 16px; }
+.pkg-section h3 { color: #0f3460; font-size: 15px; margin-bottom: 10px; }
+.pkg-section ul { list-style: none; columns: 2; }
+.pkg-section ul li { padding: 3px 0; font-size: 13px; }
+
+/* Banner */
+.banner { background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+          color: #fff; padding: 20px 24px; border-radius: 6px; margin-bottom: 24px; }
+.banner h1 { border: none; color: #fff; font-size: 22px; margin-bottom: 4px; padding: 0; }
+.banner p { color: #aac4f0; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="nav"><h2>Seg2Tracks API</h2>
+<ul><li><a href="../index.html">📋 Overview</a></li></ul>
+<div class="pkg">(default)</div><ul>
+<li><a href="../(default)/Seg2Tracks_.html">Seg2Tracks_</a></li>
+</ul>
+<div class="pkg">analysisMethod</div><ul>
+<li><a href="../analysisMethod/AnalysisMethod.html">AnalysisMethod</a></li>
+<li><a href="../analysisMethod/ChannelMerger.html">ChannelMerger</a></li>
+<li><a href="../analysisMethod/CompareMethod.html">CompareMethod</a></li>
+<li><a href="../analysisMethod/ExteriorExtraction.html">ExteriorExtraction</a></li>
+<li><a href="../analysisMethod/ExternalAnalysis.html">ExternalAnalysis</a></li>
+<li><a href="../analysisMethod/GeneralAnalysis.html">GeneralAnalysis</a></li>
+<li><a href="../analysisMethod/Interactions.html">Interactions</a></li>
+<li><a href="../analysisMethod/OperationMethod.html">OperationMethod</a></li>
+<li><a href="../analysisMethod/PrincipleComponents.html">PrincipleComponents</a></li>
+<li><a href="../analysisMethod/SegmentationComparer.html">SegmentationComparer</a></li>
+<li><a href="../analysisMethod/SegmentationComparer2.html">SegmentationComparer2</a></li>
+</ul>
+<div class="pkg">calculations</div><ul>
+<li><a href="../calculations/Area.html">Area</a></li>
+<li><a href="../calculations/AreaDistribution.html">AreaDistribution</a></li>
+<li><a href="../calculations/Circularity.html">Circularity</a></li>
+<li><a href="../calculations/Confluency.html">Confluency</a></li>
+<li><a href="../calculations/Data.html">Data</a></li>
+<li><a href="../calculations/DataType.html">DataType</a></li>
+<li><a href="../calculations/DifferenceArea.html">DifferenceArea</a></li>
+<li><a href="../calculations/DifferenceIntensity.html">DifferenceIntensity</a></li>
+<li><a href="../calculations/DifferenceIntensityMean.html">DifferenceIntensityMean</a></li>
+<li><a href="../calculations/ExternalArea.html">ExternalArea</a></li>
+<li><a href="../calculations/ExternalPerimeter.html">ExternalPerimeter</a></li>
+<li><a href="../calculations/FrameSetCalculation.html">FrameSetCalculation</a></li>
+<li><a href="../calculations/FrameSetMean.html">FrameSetMean</a></li>
+<li><a href="../calculations/FrameSetStatistic.html">FrameSetStatistic</a></li>
+<li><a href="../calculations/IntegratedIntensity.html">IntegratedIntensity</a></li>
+<li><a href="../calculations/LinkSetCalculation.html">LinkSetCalculation</a></li>
+<li><a href="../calculations/LinkSetMean.html">LinkSetMean</a></li>
+<li><a href="../calculations/LinkSetStatistic.html">LinkSetStatistic</a></li>
+<li><a href="../calculations/Location_X.html">Location_X</a></li>
+<li><a href="../calculations/Location_Y.html">Location_Y</a></li>
+<li><a href="../calculations/MajorAxisAngle.html">MajorAxisAngle</a></li>
+<li><a href="../calculations/MajorAxisLength.html">MajorAxisLength</a></li>
+<li><a href="../calculations/MeanIntensity.html">MeanIntensity</a></li>
+<li><a href="../calculations/MinorAxisLength.html">MinorAxisLength</a></li>
+<li><a href="../calculations/Perimeter.html">Perimeter</a></li>
+<li><a href="../calculations/SegmentCalculation.html">SegmentCalculation</a></li>
+</ul>
+<div class="pkg">dataStructure</div><ul>
+<li><a href="../dataStructure/DataOutput.html">DataOutput</a></li>
+<li><a href="../dataStructure/DataSet.html">DataSet</a></li>
+<li><a href="../dataStructure/FrameSet.html">FrameSet</a></li>
+<li><a href="../dataStructure/LinkSet.html">LinkSet</a></li>
+<li><a href="../dataStructure/RangeSetArea.html">RangeSetArea</a></li>
+<li><a href="../dataStructure/RecursiveDataSet.html">RecursiveDataSet</a></li>
+<li><a href="../dataStructure/ResultWorkbook.html">ResultWorkbook</a></li>
+<li><a href="../dataStructure/Segment.html">Segment</a></li>
+<li><a href="../dataStructure/SegmentModel.html">SegmentModel</a></li>
+</ul>
+<div class="pkg">geometricTools</div><ul>
+<li><a href="../geometricTools/GeometricCalculations.html">GeometricCalculations</a></li>
+<li><a href="../geometricTools/MatrixFunctions.html">MatrixFunctions</a></li>
+<li><a href="../geometricTools/ModifiedAutoThresholder.html">ModifiedAutoThresholder</a></li>
+<li><a href="../geometricTools/ModifiedWand.html">ModifiedWand</a></li>
+<li><a href="../geometricTools/PolarPoint.html">PolarPoint</a></li>
+<li><a href="../geometricTools/ProcessorModifier.html">ProcessorModifier</a></li>
+</ul>
+<div class="pkg">gui</div><ul>
+<li><a href="../gui/AnalysisController.html">AnalysisController</a></li>
+<li><a href="../gui/AnalysisModel.html">AnalysisModel</a></li>
+<li><a href="../gui/AnalysisPanel.html">AnalysisPanel</a></li>
+<li><a href="../gui/AnalysisSettings.html">AnalysisSettings</a></li>
+<li><a href="../gui/BlurModel.html">BlurModel</a></li>
+<li><a href="../gui/CalibrationPanel.html">CalibrationPanel</a></li>
+<li><a href="../gui/ExternalSegmentationSettings.html">ExternalSegmentationSettings</a></li>
+<li><a href="../gui/FloorPanel.html">FloorPanel</a></li>
+<li><a href="../gui/GuidedCalibration.html">GuidedCalibration</a></li>
+<li><a href="../gui/HeadPanel.html">HeadPanel</a></li>
+<li><a href="../gui/HelpMenuPanel.html">HelpMenuPanel</a></li>
+<li><a href="../gui/InternalSegmentationSettings.html">InternalSegmentationSettings</a></li>
+<li><a href="../gui/Message.html">Message</a></li>
+<li><a href="../gui/OperationController.html">OperationController</a></li>
+<li><a href="../gui/OperationModel.html">OperationModel</a></li>
+<li><a href="../gui/OperationPanel.html">OperationPanel</a></li>
+<li><a href="../gui/RecursionOperationController.html">RecursionOperationController</a></li>
+<li><a href="../gui/RecursionOperationModel.html">RecursionOperationModel</a></li>
+<li><a href="../gui/RecursionOperationPanel.html">RecursionOperationPanel</a></li>
+<li><a href="../gui/Seg2TracksController.html">Seg2TracksController</a></li>
+<li><a href="../gui/Seg2TracksModel.html">Seg2TracksModel</a></li>
+<li><a href="../gui/Seg2TracksPanel.html">Seg2TracksPanel</a></li>
+<li><a href="../gui/SegmentationFilters.html">SegmentationFilters</a></li>
+</ul>
+<div class="pkg">identification</div><ul>
+<li><a href="../identification/Identification.html">Identification</a></li>
+</ul>
+<div class="pkg">linkage</div><ul>
+<li><a href="../linkage/GlobalNearestNeighbor.html">GlobalNearestNeighbor</a></li>
+<li><a href="../linkage/Linkage.html">Linkage</a></li>
+<li><a href="../linkage/ModifiedHungarian.html">ModifiedHungarian</a></li>
+</ul>
+<div class="pkg">manualSegmentation</div><ul>
+<li><a href="../manualSegmentation/ManualSegmentationController.html">ManualSegmentationController</a></li>
+<li><a href="../manualSegmentation/ManualSegmentationModel.html">ManualSegmentationModel</a></li>
+<li><a href="../manualSegmentation/ManualSegmentationPanel.html">ManualSegmentationPanel</a></li>
+<li><a href="../manualSegmentation/ManualSegmentationWindow.html">ManualSegmentationWindow</a></li>
+<li><a href="../manualSegmentation/ModifiedStackWindow.html">ModifiedStackWindow</a></li>
+</ul>
+<div class="pkg">pairedDataStructure</div><ul>
+<li><a href="../pairedDataStructure/PairedDataSet.html">PairedDataSet</a></li>
+<li><a href="../pairedDataStructure/PairedList.html">PairedList</a></li>
+<li><a href="../pairedDataStructure/PairedSegment.html">PairedSegment</a></li>
+</ul>
+<div class="pkg">pairedSegmentCalculations</div><ul>
+<li><a href="../pairedSegmentCalculations/Coverage.html">Coverage</a></li>
+<li><a href="../pairedSegmentCalculations/DataMean.html">DataMean</a></li>
+<li><a href="../pairedSegmentCalculations/DiceIndex.html">DiceIndex</a></li>
+<li><a href="../pairedSegmentCalculations/DuplicateSegmentations.html">DuplicateSegmentations</a></li>
+<li><a href="../pairedSegmentCalculations/JaccardIndex.html">JaccardIndex</a></li>
+<li><a href="../pairedSegmentCalculations/ListMean.html">ListMean</a></li>
+<li><a href="../pairedSegmentCalculations/OverlapArea.html" class="active">OverlapArea</a></li>
+<li><a href="../pairedSegmentCalculations/OverlapIndex.html">OverlapIndex</a></li>
+<li><a href="../pairedSegmentCalculations/PairedDataCalculation.html">PairedDataCalculation</a></li>
+<li><a href="../pairedSegmentCalculations/PairedListCalculation.html">PairedListCalculation</a></li>
+<li><a href="../pairedSegmentCalculations/PairedSegmentCalculation.html">PairedSegmentCalculation</a></li>
+<li><a href="../pairedSegmentCalculations/SizeRatio.html">SizeRatio</a></li>
+</ul>
+<div class="pkg">sarn</div><ul>
+<li><a href="../sarn/MinimalBoundary.html">MinimalBoundary</a></li>
+<li><a href="../sarn/MinimalBoundary_Modified.html">MinimalBoundary_Modified</a></li>
+<li><a href="../sarn/OneWayContraction.html">OneWayContraction</a></li>
+<li><a href="../sarn/OneWayContraction_Exclusion.html">OneWayContraction_Exclusion</a></li>
+<li><a href="../sarn/OneWayContraction_GradientDecent.html">OneWayContraction_GradientDecent</a></li>
+<li><a href="../sarn/Sarn.html">Sarn</a></li>
+</ul>
+<div class="pkg">segmentation</div><ul>
+<li><a href="../segmentation/ActiveContour.html">ActiveContour</a></li>
+<li><a href="../segmentation/CenterPointID.html">CenterPointID</a></li>
+<li><a href="../segmentation/OtsuMethod.html">OtsuMethod</a></li>
+<li><a href="../segmentation/RestrictedOtsuMethod.html">RestrictedOtsuMethod</a></li>
+<li><a href="../segmentation/RestrictedTriangleMethod.html">RestrictedTriangleMethod</a></li>
+<li><a href="../segmentation/SARNtoSegmentationConversion.html">SARNtoSegmentationConversion</a></li>
+<li><a href="../segmentation/Segmentation.html">Segmentation</a></li>
+<li><a href="../segmentation/TriangleMethod.html">TriangleMethod</a></li>
+</ul>
+<div class="pkg">util</div><ul>
+<li><a href="../util/FileLoadFromOverlay.html">FileLoadFromOverlay</a></li>
+<li><a href="../util/FileResourcesUtil.html">FileResourcesUtil</a></li>
+<li><a href="../util/FileSelectionPanel.html">FileSelectionPanel</a></li>
+<li><a href="../util/FileType.html">FileType</a></li>
+<li><a href="../util/Seg2TracksClassLoader.html">Seg2TracksClassLoader</a></li>
+</ul>
+</div>
+
+<div id="main">
+  <div class="class-card">
+    <div class="class-header">
+      <span class="class-name">OverlapArea</span>
+      <span class="class-kind ">CLASS</span>
+      
+    </div>
+    <div class="package-label">Package: <code>pairedSegmentCalculations</code></div>
+    <br>
+    <span class="subtitle">extends <code>PairedSegmentCalculation</code></span><br>
+    <div class="class-doc">OverlapArea computes the raw pixel count of overlapping region. Asymmetric metric: seg2Area / seg1Area (returns ratio of areas). Note: Name is misleading—returns size ratio, not actual overlap area.</div>
+  </div>
+  
+        <h2>Methods</h2>
+        <table class="method-table">
+          <thead><tr><th>Signature</th><th>Description</th></tr></thead>
+          <tbody>
+    <tr>
+      <td><code class="method-sig">void calculate()</code></td>
+      <td class="method-doc">OverlapArea computes the raw pixel count of overlapping region. Asymmetric metric: seg2Area / seg1Area (returns ratio of areas). Note: Name is misleading—returns size ratio, not actual overlap area.</td>
+    </tr></tbody>
+        </table>
+</div>
+</body>
+</html>

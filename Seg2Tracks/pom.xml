@@ -11,7 +11,7 @@
 	</parent>
 	<groupId>org.zentjm</groupId>
 	<artifactId>Seg2Tracks_</artifactId>
-	<version>0.4.13</version>
+	<version>0.5.4</version>
 	<name>Seg2Tracks</name>
 	<description>Seg2Tracks plugin for Fiji</description>
 	<url>https://imagej.net/plugins/seg2tracks</url>
@@ -79,7 +79,7 @@
 		<!-- Path to your local Fiji installation.
 		     When set, running "mvn install" automatically copies the built jar
 		     into Fiji's plugins folder via the scijava copy-jars goal. -->
-		<scijava.app.directory>/Applications/Fiji.app</scijava.app.directory>
+		<scijava.app.directory>/Applications/Fiji</scijava.app.directory>
 	</properties>
 	<repositories>
 		<repository>
