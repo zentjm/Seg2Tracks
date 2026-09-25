@@ -60,6 +60,7 @@ public class ManualSegmentationPanel extends JFrame implements ActionListener {
 	JButton buttonPreviousFrame = new JButton("Previous Frame");
 	JButton buttonRestoreSelection = new JButton("Restore Selection");
 	JButton buttonEndObject = new JButton("End Object");
+	JButton buttonCancelObject = new JButton("Cancel Object");
 	
 	//Modification Menu
 	JButton buttonDeleteObject = new JButton("Delete");
@@ -126,6 +127,7 @@ public class ManualSegmentationPanel extends JFrame implements ActionListener {
 		buttonPreviousFrame.addActionListener(this);
 		buttonRestoreSelection.addActionListener(this);
 		buttonEndObject.addActionListener(this);
+		buttonCancelObject.addActionListener(this);
 		buttonMainMenu.addActionListener(this); //Multiple panels use
 	
 		//Modification Panel
@@ -164,10 +166,11 @@ public class ManualSegmentationPanel extends JFrame implements ActionListener {
 	}
 
 	public void setSegmentPanel() {
-		panel.setLayout(new GridLayout(7, 1));
+		panel.setLayout(new GridLayout(8, 1));
 		panel.removeAll();
 		panel.add(buttonStartObject);
 		panel.add(buttonEndObject);
+		panel.add(buttonCancelObject);
 		panel.add(buttonNextFrame);
 		panel.add(buttonPreviousFrame);
 		panel.add(buttonRestoreSelection);
@@ -258,6 +261,7 @@ public class ManualSegmentationPanel extends JFrame implements ActionListener {
 	public void stateObject(boolean startObject, boolean frameIteration, boolean firstFrame, boolean lastFrame, boolean selectingObject) {
 		buttonStartObject.setEnabled(startObject);
 		buttonEndObject.setEnabled(frameIteration);
+		buttonCancelObject.setEnabled(frameIteration);
 		buttonNextFrame.setEnabled(frameIteration && !lastFrame);
 		buttonPreviousFrame.setEnabled(frameIteration && !firstFrame);
 		buttonRestoreSelection.setEnabled(frameIteration && !firstFrame);
@@ -269,6 +273,12 @@ public class ManualSegmentationPanel extends JFrame implements ActionListener {
 		dispatchEvent(new WindowEvent(this, WindowEvent.WINDOW_CLOSING));
 	}
 	
+	/** Shows an OK/Cancel question; returns true if the user chose OK. */
+	public boolean dialogConfirm(String question) {
+		return JOptionPane.showConfirmDialog((Component) null, question, "Confirm",
+				JOptionPane.OK_CANCEL_OPTION) == JOptionPane.OK_OPTION;
+	}
+
 	public void dialogAlert(String alert) {
 		JOptionPane.showMessageDialog((Component) null, alert, "alert", JOptionPane.WARNING_MESSAGE);
 		 //int choice =  JOptionPane.showConfirmDialog((Component) null, alert, "alert", JOptionPane.OK_CANCEL_OPTION);
@@ -294,6 +304,7 @@ public class ManualSegmentationPanel extends JFrame implements ActionListener {
 		
 		if (e.getSource() == buttonRestoreSelection) controller.restoreSelection();
 		if (e.getSource() == buttonEndObject) controller.endObject();
+		if (e.getSource() == buttonCancelObject) controller.cancelObject();
 		
 		//Object modification buttons
 		if (e.getSource() == buttonDeleteObject) controller.deleteObject();

@@ -660,9 +660,10 @@ public class RecursionManualController {
 		segment = null;
 		linkSet = new LinkSet(cellDataSet);
 		if (frameScrollbar != null) frameScrollbar.setEnabled(false);
-		IJ.setTool(Prefs.get(ManualSegmentationController.PREF_TOOL, "polygon"));
+		armDrawTool();
 		frame = currentImagePlus.getCurrentSlice();
 		startFrame = frame;
+		frameLock.lock(currentImagePlus, frame);
 		panel.stateObject(false, true,
 		                  frame == startFrame,
 		                  frame == currentImagePlus.getImageStackSize(),
@@ -674,6 +675,7 @@ public class RecursionManualController {
 	 * Mirrors ManualSegmentationController.nextFrame().
 	 */
 	public void nextFrame() {
+		traceTool.commitPending();
 		if (currentImagePlus.getRoi() == null) {
 			panel.dialogAlert("Must select an outline for this frame");
 			return;
@@ -695,8 +697,9 @@ public class RecursionManualController {
 
 		if (currentImagePlus.getCurrentSlice() != currentImagePlus.getImageStackSize()) {
 			frame++;
-			currentImagePlus.setSlice(frame);
+			frameLock.moveTo(frame);
 		}
+		traceTool.resetForNewFrame(); // the carried-over outline is editable on the new frame
 		syncPreview();
 		panel.stateObject(false, true,
 		                  frame == startFrame,
@@ -716,7 +719,7 @@ public class RecursionManualController {
 
 		if (frame > startFrame) {
 			frame--;
-			currentImagePlus.setSlice(frame);
+			frameLock.moveTo(frame);
 		}
 
 		// Restore the saved ROI on the previous frame
@@ -724,6 +727,7 @@ public class RecursionManualController {
 			currentImagePlus.setRoi(segment.getUserRoi());
 			restoreRoi = segment.getUserRoi();
 		}
+		traceTool.resetForNewFrame();
 
 		syncPreview();
 		panel.stateObject(false, true,
@@ -746,9 +750,34 @@ public class RecursionManualController {
 	 * Finalises the current void object: commits the last frame's ROI,
 	 * adds the LinkSet to the cell DataSet, and re-enables navigation.
 	 */
+	/**
+	 * Abandons the void currently being drawn. Nothing drawn for it is kept.
+	 * Asks for confirmation when frames have already been committed.
+	 */
+	public void cancelObject() {
+		if (linkSet != null && linkSet.size() > 0
+				&& !panel.dialogConfirm("Discard this object (" + linkSet.size() + " frame(s) drawn)?")) {
+			return;
+		}
+		// The LinkSet constructor registered it with cellDataSet in startObject(); undo that.
+		if (linkSet != null) cellDataSet.getLinkSetList().remove(linkSet);
+		linkSet = null;
+		segment = null;
+		previousSegment = null;
+		disarmDrawTool();
+		currentImagePlus.killRoi();
+		frameLock.unlock();
+		if (startFrame > 0) currentImagePlus.setSlice(startFrame);
+		segmentationInProgress = false;
+		if (sidebar != null) sidebar.setCellSwitchingEnabled(true);
+		if (frameScrollbar != null) frameScrollbar.setEnabled(true);
+		panel.stateObject(true, false, false, false, true);
+	}
+
 	public void endObject() {
+		traceTool.commitPending();
 		if (currentImagePlus.getRoi() == null) {
-			panel.dialogAlert("Must select an outline for the final frame");
+			panel.dialogAlert("Draw an outline on this frame first, or use Cancel Object to discard this object.");
 			return;
 		}
 		if (!withinBounds(currentImagePlus.getRoi())) {
@@ -827,6 +856,9 @@ public class RecursionManualController {
 
 		// Void successfully committed — unlock cell-switching so the user may
 		// navigate to another cell or remain here to draw another void.
+		disarmDrawTool();
+		currentImagePlus.killRoi();
+		frameLock.unlock();
 		segmentationInProgress = false;
 		if (sidebar != null) sidebar.setCellSwitchingEnabled(true);
 		if (frameScrollbar != null) frameScrollbar.setEnabled(true);
@@ -869,6 +901,36 @@ public class RecursionManualController {
 
 	/** The canvas-space LinkSet whose current-frame segment is being redrawn. */
 	private LinkSet redrawTargetLinkSet;
+
+	/** 0-based canvas frame being redrawn, fixed when the redraw is armed. */
+	private int redrawRelFrame;
+
+	/** Dashed, non-editable copy of the old outline shown while a redraw is armed. */
+	private final RedrawReference redrawReference = new RedrawReference();
+	/** Keeps the cell stack on the frame being drawn (new object or redraw). */
+	private final FrameLock frameLock = new FrameLock();
+	/** Click-to-trace freehand, used when the draw-tool preference is "freehand". */
+	private final ClickTraceTool traceTool = new ClickTraceTool();
+	/** True while a drawing tool is armed (object or redraw in progress). */
+	private boolean drawToolArmed = false;
+
+	/** Arms the preferred drawing tool: ImageJ's polygon tool, or click-to-trace freehand. */
+	private void armDrawTool() {
+		drawToolArmed = true;
+		if ("freehand".equals(Prefs.get(ManualSegmentationController.PREF_TOOL, "polygon"))) {
+			traceTool.activate(currentImagePlus, color);
+		} else {
+			traceTool.deactivate();
+			IJ.setTool("polygon");
+		}
+	}
+
+	/** Disarms drawing and returns to the hand tool. */
+	private void disarmDrawTool() {
+		drawToolArmed = false;
+		traceTool.deactivate();
+		IJ.setTool("hand");
+	}
 
 	/**
 	 * Returns the single LinkSet with any selected (red-highlighted) segment in
@@ -918,11 +980,17 @@ public class RecursionManualController {
 		}
 
 		redrawTargetLinkSet = target;
+		redrawRelFrame = relFrame;
 		redrawInProgress = true;
 		if (frameScrollbar != null) frameScrollbar.setEnabled(false);
 		if (sidebar != null) sidebar.setCellSwitchingEnabled(false);
-		IJ.setTool(Prefs.get(ManualSegmentationController.PREF_TOOL, "polygon"));
-		currentImagePlus.setRoi(canvasSeg.getRoi()); // preload the current outline as a starting point
+		currentImagePlus.killRoi();
+		// Show the old outline as a dashed, non-editable reference; the user draws a fresh one.
+		if (canvasSeg.getRoi() != null)
+			redrawReference.show(overlay, canvasSeg.getRoi(), relFrame + 1, color, altColor);
+		currentImagePlus.updateAndDraw();
+		frameLock.lock(currentImagePlus, relFrame + 1);
+		armDrawTool();
 		panel.setRedrawSegmentPanel();
 	}
 
@@ -932,6 +1000,7 @@ public class RecursionManualController {
 	 * accumulated dataset all get the same object swapped in at the same position.
 	 */
 	public void applyRedrawSegment() {
+		traceTool.commitPending();
 		if (currentImagePlus.getRoi() == null) {
 			panel.dialogAlert("Must draw a new outline before applying.");
 			return;
@@ -941,7 +1010,7 @@ public class RecursionManualController {
 			return;
 		}
 
-		int relFrame = currentImagePlus.getCurrentSlice() - 1;
+		int relFrame = redrawRelFrame; // not the current slice, in case the user scrolled
 		int absFrame = relFrame + cellFirstFrame;
 
 		Segment oldCanvasSeg = getCanvasSegment(redrawTargetLinkSet, relFrame);
@@ -962,11 +1031,13 @@ public class RecursionManualController {
 		int canvasIdx = canvasFrameSet.indexOf(oldCanvasSeg);
 		if (canvasIdx >= 0) canvasFrameSet.set(canvasIdx, newCanvasSeg);
 
-		if (oldCanvasSeg.getRoi() != null) overlay.remove(oldCanvasSeg.getRoi());
+		redrawReference.clear();
+		if (oldCanvasSeg.getRoi() != null) RedrawReference.removeExact(overlay, oldCanvasSeg.getRoi());
 		Roi newRoi = newCanvasSeg.getRoi();
 		if (newRoi != null) {
 			newRoi.setStrokeColor(color);
 			newRoi.setStrokeWidth(2);
+			newRoi.setPosition(relFrame + 1); // otherwise the new outline shows on every frame
 			overlay.add(newRoi);
 		}
 
@@ -1012,30 +1083,33 @@ public class RecursionManualController {
 			}
 		}
 
-		// Clear selection across the whole track — it was selected (red) to enter this
-		// mode; leave everything deselected afterward, matching mergeSelectedObjects().
-		for (Segment s : redrawTargetLinkSet) {
-			s.setRoiSelected(false);
-			if (s.getRoi() != null) s.getRoi().setStrokeColor(color);
-		}
-
-		currentImagePlus.updateAndDraw();
 		finishRedrawSegment();
 	}
 
 	/** Discards the drawn outline and returns to the modification panel without changing any data. */
 	public void cancelRedrawSegment() {
-		currentImagePlus.killRoi();
+		redrawReference.restore(); // put the original outline back; data was never touched
 		finishRedrawSegment();
 	}
 
 	/** Restores normal navigation and returns to the modification panel after Apply or Cancel. */
 	private void finishRedrawSegment() {
+		// Deselect the track (it was selected to enter this mode) and clear the drawn
+		// outline, otherwise ImageJ keeps showing it on every frame.
+		if (redrawTargetLinkSet != null) {
+			for (Segment s : redrawTargetLinkSet) {
+				s.setRoiSelected(false);
+				if (s.getRoi() != null) s.getRoi().setStrokeColor(color);
+			}
+		}
+		disarmDrawTool();
+		currentImagePlus.killRoi();
+		frameLock.unlock();
 		redrawInProgress = false;
 		redrawTargetLinkSet = null;
 		if (frameScrollbar != null) frameScrollbar.setEnabled(true);
 		if (sidebar != null) sidebar.setCellSwitchingEnabled(true);
-		IJ.setTool("hand");
+		currentImagePlus.updateAndDraw();
 		panel.setModificationPanel();
 	}
 
@@ -1332,6 +1406,8 @@ public class RecursionManualController {
 		              ? "freehand" : "polygon";
 		Prefs.set(ManualSegmentationController.PREF_TOOL, next);
 		panel.updateDrawToolButton(next);
+		// Switch immediately if a drawing tool is armed (an object or redraw in progress).
+		if (drawToolArmed) armDrawTool();
 	}
 
 	private static Color decodeColor(String hex) {

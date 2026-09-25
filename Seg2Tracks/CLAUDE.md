@@ -277,6 +277,11 @@ data-changing event. `refreshSubsegmentationOnAllPanels()` is always called from
 - **`MinimalBoundary` in recursive mode** — farthest-point outer constraint substitution not
   applied (its `outerPoints()` returns multiple angular points, incompatible with single-point
   substitution). Deferred.
+- **`Roi.equals()` is not identity** — ImageJ compares type, bounds and length only, so
+  `Overlay.contains()`/`Overlay.remove(Roi)` can match a *different* but "equal" ROI (e.g. a clone).
+  This made Cancel Redraw drop the outline from the display (fixed 2026-09-24 via
+  `RedrawReference.indexOfExact()/removeExact()`). Delete/merge in both manual controllers still use
+  `overlay.remove(seg.getRoi())`; only a risk if two outlines share identical bounds and length.
 - **Segmentation Comparer Settings likely NPEs** — `CompareMethod.getCalculations()` returns
   `null` (TODO stub), and `AnalysisController.openAnalysisSettings()` passes that straight to
   `AnalysisSettings`, which does `for (Data data : dataList)`. Opening Settings with
@@ -328,31 +333,36 @@ missing from config, commented-out binary segmentation. Still open, all low impa
   Structurally simpler there: one flat `DataSet`, no canvas/full-image coordinate split, so only
   two lists need the object swap (the `LinkSet`, `dataSet`'s `FrameSet`) instead of five.
   **UI polish gaps in both implementations are tracked separately below ("Redraw UI fixes").**
-- [ ] **Redraw UI fixes** — Redraw Segment (`RecursionManualController`/`ManualSegmentationController`,
-  their respective `startRedrawSegment()`/`applyRedrawSegment()`) is functionally complete but has
-  four known UI rough edges, none addressed yet:
-  1. **Outline color on arm** — `startRedrawSegment()` preloads the existing segment's `Roi` as-is
-     (`imagePlus.setRoi(seg.getRoi())` / `currentImagePlus.setRoi(canvasSeg.getRoi())`), whatever
-     color it happens to have (likely still red from being selected to enter this mode). Needs a
-     deliberate, distinct color that communicates "this is the boundary you're about to replace."
-  2. **Delete-prior/restore-prior toggle** — the old outline is only removed from the overlay at
-     Apply time, not when arming. While actively drawing the replacement, the user may see both the
-     stale reference outline and the live draft simultaneously with no way to declutter. Add a
-     button that hides the prior outline (and flips to "restore" it) without discarding any data —
-     purely a display toggle during the armed state.
-  3. **Lock the stack during redraw** — `RecursionManualController` disables the custom
-     `frameScrollbar` widget on arm, but this likely doesn't block ImageJ's native slice navigation
-     (arrow keys, the image window's own scrollbar) — needs verification and probably a more
-     complete lock. `ManualSegmentationController`'s port doesn't lock anything at all; that needs
-     the equivalent treatment (whatever the complete fix turns out to be).
-  4. **Grabbable vertex count** — the preloaded starting shape is the full dense perimeter (one
-     point per pixel from `straightPerimeter`/SARN generation), not a practical handful of
-     draggable vertices. Needs simplification specifically for the editable starting shape. Related
-     to, but distinct from, the deferred Douglas-Peucker perimeter-simplification TODO below (that
-     one is about the SARN/`shortcutPerimeter` generation pipeline, not what gets loaded into the
-     ROI editor) — a shared simplification algorithm could plausibly serve both, but they are
-     separate call sites and separate decisions.
-  More concerns likely exist; this is enough to start from.
+- [x] **Redraw UI fixes** — reworked 2026-09-24 after the first smoke test; user re-tested OK 2026-09-24:
+  instead of preloading the old outline as an editable ROI, `startRedrawSegment()` now takes the
+  real outline out of the overlay and shows a dashed, non-editable copy in a contrasting colour
+  (`RedrawReference`); the user draws a fresh outline. Apply removes the copy; Cancel puts the
+  original back (data is never touched until Apply). This resolves the old items 1 (outline
+  colour on arm), 2 (stale outline cluttering the draft), and 4 (dense perimeter = too many
+  grabbable vertices). Item 3 (lock the stack) is resolved by `FrameLock`, an `ImageListener`
+  that snaps the image back to the locked slice on any navigation (scrollbar, arrow keys, wheel);
+  used during redraw and while drawing a new object, in both controllers. Next/Previous Frame move
+  via `frameLock.moveTo()`. Earlier same-day fixes: the drawn ROI is cleared after Apply/Cancel
+  (it used to show on every frame), Cancel deselects the track, Apply uses the frame fixed at arm
+  time (`redrawFrame`/`redrawRelFrame`), and the recursive overlay ROI gets its slice position.
+- [x] **Manual drawing usability (from 2026-09-23 smoke test)** — user re-tested OK 2026-09-24:
+  - Polygon/Freehand toggle now takes effect immediately (`toggleDrawTool()` re-arms if armed).
+  - **Cancel Object** (`cancelObject()`, both controllers; confirms if frames were drawn; removes
+    the LinkSet that the `LinkSet(DataSet)` constructor auto-registered).
+  - Freehand is now **click-to-trace** (`ClickTraceTool`), replacing ImageJ's hold-to-draw
+    freehand (user decision): click to start, the outline follows the cursor with the button up,
+    click again to finish, or it auto-closes within ~6 screen px of the start after first moving
+    away. Esc discards the trace. While armed, ImageJ's tool is set to "hand" so clicks don't also
+    start another selection; cursor forced to crosshair. Controllers call
+    `traceTool.commitPending()` before reading the ROI (Next Frame, End Object, Apply Redraw).
+    A finished trace is Douglas-Peucker-simplified (~2 screen px) to a POLYGON Roi and ImageJ's
+    tool switches to "polygon", so ImageJ's native node editing applies (drag node, shift-click
+    add, alt-click delete, drag inside to move); clicking away from the outline starts a new trace.
+    Next/Previous Frame call `traceTool.resetForNewFrame()` so the carried-over outline is editable
+    on the new frame (frame-by-frame adjust-by-dragging, as with the polygon tool).
+    The in-progress trace is shown as a FREELINE in the ROI colour: a POLYLINE draws a handle on
+    every point, which on a dense trace looks solid black.
+    Arm/disarm goes through `armDrawTool()`/`disarmDrawTool()` in both controllers.
 - [x] ~~Remove the `< 200`/`< 50` thresholds so recursive void perimeters are processed~~ and
   ~~widen loop-removal proximity check from Manhattan to Euclidean~~ — done. `shortcutPerimeter`
   no longer skips small contours; the search window is now dynamically clamped to **half** the
@@ -483,11 +493,8 @@ missing from config, commented-out binary segmentation. Still open, all low impa
   panels themselves: slider-driven overlay updates, Auto-Calibrate, Apply-then-reopen persistence)
   has not been done** — same acknowledged gap as Redraw Segment; requires a live Fiji session.
 
-  Not yet done: item 4 of "Redraw UI fixes" above (grabbable vertex count for the Redraw Segment
-  editable starting shape) is a *different*, still-open simplification need — of whatever polygon
-  gets loaded into the ROI editor for interactive dragging, not this generation pipeline. A shared
-  `douglasPeucker()` call could serve it (different epsilon — "few enough points to drag" vs.
-  "shape-fidelity guarantee") but that item is still unimplemented.
+  (Item 4 of "Redraw UI fixes", the grabbable vertex count of the editable starting shape, no
+  longer applies: since 2026-09-24 Redraw shows the old outline as a non-editable reference.)
 - [ ] Help system — `HelpMenuPanel` content + tooltips
 - [ ] Batch testing macro
 - [ ] ImageJ.net wiki page

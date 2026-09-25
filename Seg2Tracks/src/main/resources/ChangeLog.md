@@ -15,6 +15,12 @@ guide, use the **User Manual** button.
 
 ### New editing capability
 
+- **Freehand drawing no longer needs the mouse held down.** Click once to start, move the mouse to trace, and click again to finish (or come back to the starting point and it closes by itself). Press Esc to throw away a trace in progress. The finished outline gets draggable nodes, like a polygon: drag a node to adjust it, shift-click to add a node, alt-click to remove one. After **Next Frame**, the outline carried over from the previous frame can be adjusted the same way instead of being traced again.
+- The image now **stays on the frame you are drawing** during Redraw Segment and while drawing a new object, so it can't be scrolled away by accident. Next Frame and Previous Frame still work.
+- During **Redraw Segment**, the old outline is now shown as a dashed line in a contrasting colour that can't be edited by accident. Draw the new outline, then Apply to replace it, or Cancel to keep the old one.
+- Added **Cancel Object** to Manual and Recursive Manual Segmentation. If you start an object and change your mind, you can now discard it instead of being forced to draw an outline to finish it.
+- Fixed **Redraw Segment** display issues: after applying, the new outline no longer appears on every frame of the track; cancelling now returns the track to its normal colour; and the redraw always applies to the frame you started it on.
+- Fixed the **Polygon/Freehand tool toggle** so it takes effect immediately, including in the middle of drawing an object.
 - Added **Redraw Segment**, in both Manual Segmentation and Recursive Manual Segmentation. Correcting a single frame's outline no longer requires deleting and re-drawing the whole track: select the object (same click-to-select used by Delete/Merge), navigate to the frame that needs correcting, click **Redraw Segment**, draw the replacement outline, then **Apply Redraw** (or **Cancel Redraw** to discard). Every other frame in the track, and its link to the frames before/after it, is untouched.
 - Added **Boundary Cleanup Settings**, accessed from the SARN Preprocessing row's **Settings** dialog. Lets you tune how aggressively generated boundaries are cleaned up and simplified, either by entering values directly or with **Guided Calibration**: a live preview that overlays a boundary before and after cleanup on a real object from your data, with an auto-calibrate option to suggest a starting point from your dataset.
 

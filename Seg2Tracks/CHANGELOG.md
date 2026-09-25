@@ -11,6 +11,18 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
 
 ### Added
 
+- **Click-to-trace freehand drawing** — the Freehand tool in Manual and Recursive Manual
+  Segmentation no longer needs the mouse held down: click to start, move to trace, click again
+  (or return to the start point) to close; Esc discards the trace. Replaces ImageJ's
+  hold-to-draw freehand (`ClickTraceTool`). The finished trace is simplified to a polygon with
+  draggable nodes (ImageJ polygon editing: drag, shift-click to add, alt-click to delete), and the
+  outline carried over by Next Frame stays editable, so later frames can be adjusted by dragging.
+- **Frame lock while drawing** — during Redraw Segment and while drawing a new object, the image
+  can no longer be scrolled off the frame being drawn (`FrameLock`); Next/Previous Frame still work.
+- **Cancel Object** — in Manual and Recursive Manual Segmentation, an object that has been started
+  can now be abandoned (previously End Object insisted on an outline, trapping the user). Asks for
+  confirmation if any frames were already drawn, and removes the LinkSet that `LinkSet(DataSet)`
+  auto-registers.
 - **Multi-Way Reduction Contraction (MRC)** — a new SARN external-segmentation method
   (registered in `seg2tracks.config`, selectable from the SARN dropdown). Resolves a cell's
   boundary sector by sector instead of with a single nearest-neighbour radius: each angular
@@ -72,6 +84,22 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
 
 ### Fixed
 
+- **Cancel Redraw removed the outline from the display** — ImageJ's `Roi.equals()` treated the
+  reference copy as equal to the original, so the original was never put back. Overlay operations
+  in `RedrawReference` and the Apply path now match by object identity.
+- **Redraw Segment shows the old outline as a locked reference** — instead of loading the old
+  outline as an editable selection (which could be modified by accident and showed every point as
+  a handle), it is shown as a dashed, non-editable line in a contrasting colour while the new
+  outline is drawn; Apply removes it and Cancel restores it (`RedrawReference`).
+- **Redraw Segment display and safety fixes** (both manual controllers) — after Apply the drawn
+  ROI was never cleared, so the new outline showed on every frame until the session restarted (in
+  Recursive Manual Segmentation the new overlay ROI also lacked a slice position); Cancel Redraw left
+  the track selected (red); Apply used the current slice rather than the frame the redraw was
+  started on; and the preloaded outline was the overlay's own `Roi`, so editing it and cancelling
+  altered the stored outline. Selection clearing and ROI cleanup now happen in
+  `finishRedrawSegment()` for both Apply and Cancel.
+- **Draw-tool toggle took effect only at the next Start Object** — `toggleDrawTool()` now also
+  switches the active ImageJ tool when a drawing tool is in use.
 - **Analysis failures were silent (no export, no error)** — `AnalysisController.runAnalysisThread()`
   never called `get()` on its `SwingWorker`, so any exception thrown during analysis was
   swallowed and the user just saw no export. It now overrides `done()`, prints the stack

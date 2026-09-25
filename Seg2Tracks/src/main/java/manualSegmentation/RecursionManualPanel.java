@@ -49,6 +49,7 @@ public class RecursionManualPanel extends JFrame implements ActionListener {
 	JButton buttonPreviousFrame    = new JButton("Previous Frame");
 	JButton buttonRestoreSelection = new JButton("Restore Selection");
 	JButton buttonEndObject        = new JButton("End Object");
+	JButton buttonCancelObject     = new JButton("Cancel Object");
 
 	/** Advances to the next parent segment without ending the session. */
 	JButton buttonNextCell         = new JButton("Next Segment");
@@ -97,6 +98,7 @@ public class RecursionManualPanel extends JFrame implements ActionListener {
 		buttonPreviousFrame   .addActionListener(this);
 		buttonRestoreSelection.addActionListener(this);
 		buttonEndObject       .addActionListener(this);
+		buttonCancelObject    .addActionListener(this);
 		buttonNextCell        .addActionListener(this);
 		buttonModify          .addActionListener(this);
 		buttonDeleteObject    .addActionListener(this);
@@ -145,10 +147,11 @@ public class RecursionManualPanel extends JFrame implements ActionListener {
 	 * Call stateObject() immediately after to set initial button enable states.
 	 */
 	public void setSegmentPanel() {
-		panel.setLayout(new GridLayout(8, 1));
+		panel.setLayout(new GridLayout(9, 1));
 		panel.removeAll();
 		panel.add(buttonStartObject);
 		panel.add(buttonEndObject);
+		panel.add(buttonCancelObject);
 		panel.add(buttonNextFrame);
 		panel.add(buttonPreviousFrame);
 		panel.add(buttonRestoreSelection);
@@ -230,6 +233,7 @@ public class RecursionManualPanel extends JFrame implements ActionListener {
 	                        boolean selectingObject) {
 		buttonStartObject     .setEnabled(startObject);
 		buttonEndObject       .setEnabled(frameIteration);
+		buttonCancelObject    .setEnabled(frameIteration);
 		buttonNextFrame       .setEnabled(frameIteration && !lastFrame);
 		buttonPreviousFrame   .setEnabled(frameIteration && !firstFrame);
 		buttonRestoreSelection.setEnabled(frameIteration && !firstFrame);
@@ -259,6 +263,12 @@ public class RecursionManualPanel extends JFrame implements ActionListener {
 		dispose();
 	}
 
+	/** Shows an OK/Cancel question; returns true if the user chose OK. */
+	public boolean dialogConfirm(String question) {
+		return JOptionPane.showConfirmDialog((Component) null, question, "Confirm",
+		                                     JOptionPane.OK_CANCEL_OPTION) == JOptionPane.OK_OPTION;
+	}
+
 	public void dialogAlert(String message) {
 		JOptionPane.showMessageDialog((Component) null, message,
 		                              "Alert", JOptionPane.WARNING_MESSAGE);
@@ -277,6 +287,7 @@ public class RecursionManualPanel extends JFrame implements ActionListener {
 		if (e.getSource() == buttonPreviousFrame)     controller.previousFrame();
 		if (e.getSource() == buttonRestoreSelection)  controller.restoreSelection();
 		if (e.getSource() == buttonEndObject)         controller.endObject();
+		if (e.getSource() == buttonCancelObject)      controller.cancelObject();
 
 		if (e.getSource() == buttonNextCell)          controller.nextCell();
 
