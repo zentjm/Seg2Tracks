@@ -263,6 +263,20 @@ data-changing event. `refreshSubsegmentationOnAllPanels()` is always called from
   "Send to Settings" calls the parent dialog's `receiveCalibration()` and closes. While a Guided
   Calibration is open its settings dialog is hidden (restored in its `dispose()`); windows are
   placed by `CalibrationWindows`. User decision 2026-10-06.
+- **Shared progress bar** (one bar in `FloorPanel` for every panel, no text painted on it; a
+  status label beside it shows the text): runs call `Seg2TracksController.startProgress(panelName)`
+  before starting their worker; stages keep calling `progressBar.setString(stage)`, which
+  `FloorPanel` mirrors into the label as "Set 2 — <stage>" (property listener, any thread); the
+  end goes through `finishProgress(panelName, result, FloorPanel.Outcome)` → green ✓ / red ✕ /
+  grey (cancelled), via `OperationController.operationComplete()` /
+  `AnalysisController.analysisComplete()`. The result stays until the next **button** press in a
+  Seg2Tracks panel (`clearProgressResult()` in the panels' `actionPerformed`, gated on
+  `AbstractButton` because some dropdowns fire action events when refreshed in code), then "Ready".
+  `FloorPanel` uses GridBagLayout (it silently fell back to FlowLayout before 2026-10-06, so its
+  constraints were ignored); the bar's column has `weightx = 1` to take the spare width.
+  Failed segmentation runs go through `OperationController.reportOperationFailure()`: a
+  `util.UserInputException` gets a plain dialog and no stack trace; anything else prints its trace
+  (Fiji opens its Console) and the dialog says so. Added 2026-10-06 at the user's request.
 - **Tab encoding** — some source files use hard tabs. The Edit tool may fail to match indented
   code. Use `sed -i` for single-line substitutions in those files.
 - **`allSegmentationLoaded()`** is the correct hook for any logic that must run after any
@@ -300,9 +314,6 @@ data-changing event. `refreshSubsegmentationOnAllPanels()` is always called from
 - **Perimeters are pixel-corner coordinates — always build their ROIs as `Roi.POLYGON`.** ImageJ
   draws line-type ROIs (POLYLINE/FREELINE) with vertices at pixel centres, which shifts a corner-
   coordinate outline half a pixel toward +x/+y (the Preview did this until 2026-10-06).
-- **Progress bar is not reset between actions** — after a run it keeps showing e.g. "Operation
-  Complete" until the user switches Segmentation/Analysis menus (only `FloorPanel` resets it).
-  User asked (2026-09-24) for it to reset when the next action starts. Not yet done.
 - **`ModifiedHungarian.linkAssist()` Javadoc is stale** — says it returns null / is non-functional,
   but it now returns the matrix or throws. Class-level note still calls the implementation incomplete.
 

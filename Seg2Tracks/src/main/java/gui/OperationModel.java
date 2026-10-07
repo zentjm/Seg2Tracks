@@ -110,9 +110,8 @@ public class OperationModel extends Observable{
 		//return data to controller
 		controller.setRunData(runType, dataSet);	
 		
-		//update progress bar
-		progressBar.setValue(progressBar.getMaximum());
-		progressBar.setString("Operation Complete");
+		//update progress bar: "<panel>: Operation Complete", until the next action
+		controller.operationComplete();
 	}
 
 	//Identifies points

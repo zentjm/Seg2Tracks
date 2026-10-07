@@ -340,6 +340,7 @@ public class AnalysisController implements ActionListener {
 			//model.runIt();
 				
 			//Thread
+			controller.startProgress(panelName());
 			SwingWorker runAnalysis = runAnalysisThread();
 			runAnalysis.execute();
 
@@ -347,6 +348,21 @@ public class AnalysisController implements ActionListener {
 	}
 	
 	
+	/** Name shown with this panel's results on the shared progress bar ("Analysis 1", ...). */
+	String panelName() {
+		return "Analysis " + (panelNumber + 1);
+	}
+
+	/** Called by the model when the analysis finishes successfully. */
+	public void analysisComplete() {
+		controller.finishProgress(panelName(), "Analysis Complete", FloorPanel.Outcome.COMPLETE);
+	}
+
+	/** Any button press in this panel clears a finished result left on the shared bar. */
+	public void clearProgressResult() {
+		controller.clearProgressResult();
+	}
+
 	public SwingWorker runAnalysisThread() {
 		return new SwingWorker<Void, Integer>() {
 			@Override
@@ -365,8 +381,8 @@ public class AnalysisController implements ActionListener {
 					get();
 				} catch (java.util.concurrent.ExecutionException e) {
 					Throwable cause = (e.getCause() != null) ? e.getCause() : e;
-					getProgressBar().setString("Analysis Failed");
-					if (cause instanceof analysisMethod.AnalysisInputException) {
+					controller.finishProgress(panelName(), "Analysis Failed", FloorPanel.Outcome.FAILED);
+					if (cause instanceof util.UserInputException) {
 						// Expected problem with the input: the message says what to do. No stack
 						// trace, which would pop up Fiji's Console and confuse the user.
 						JOptionPane.showMessageDialog(null, cause.getMessage(),

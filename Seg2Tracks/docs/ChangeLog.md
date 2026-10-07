@@ -28,6 +28,13 @@ guide, use the **User Manual** button.
 
 - Fixed **older datasets failing to load**. Save files created before v0.5.1 stopped opening in later versions (Load Data silently did nothing). They now load correctly again, and new save files continue to work — both old and new formats are read interchangeably.
 
+### Progress bar
+
+- The progress bar is now **wider**, and its text is shown in a status line beside it: what is running (for example *Set 2 — Segmentation*), the result in colour (green for complete, red for failed), and *Ready* when idle.
+- The status line says **which panel** a result belongs to (for example *Set 2: Operation Complete* or *Analysis 1: Analysis Failed*), and the result **clears when you press the next button** instead of lingering.
+- Subsegmentation runs now show when they are complete, and cancelled runs say *Operation Cancelled*.
+- If a segmentation run fails, the progress bar says *Operation Failed* and a message explains what happened, instead of the bar silently stopping part-way. Fiji's Console window only opens for unexpected errors, and the message says so.
+
 ### Settings windows
 
 - **Guided Calibration now fills in the settings window instead of changing settings directly.** Its button is now **Send to Settings**: it copies the values into the Object Identification (or Boundary Cleanup) Settings boxes, and nothing changes until you press **Apply** there. This also means the warning about clearing loaded segmentations is always shown when it applies. While Guided Calibration is open, the settings window steps aside and the preview image opens next to the calibration controls instead of covering them. Guided Calibration starts from the values currently in the settings boxes, even ones you have not applied yet.

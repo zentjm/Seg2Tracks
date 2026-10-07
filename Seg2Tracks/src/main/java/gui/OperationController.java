@@ -342,6 +342,7 @@ public class OperationController {
 	 */
 	public void cancelInternalSegmentation() {
 		if (runInternalSegmentation != null) runInternalSegmentation.cancel(true);
+		controller.finishProgress(getDataSetName(), "Operation Cancelled", FloorPanel.Outcome.CANCELLED);
 		panel.updateSegmentationLoaded(1, 0); // reset button to "Run"
 	}
 	
@@ -435,6 +436,40 @@ public class OperationController {
 		else SwingUtilities.invokeLater(r);
 	}
 
+	// ── Progress bar status (shared bar; see Seg2TracksController.finishProgress) ──
+
+	/** Called by the models when a run finishes successfully. */
+	public void operationComplete() {
+		controller.finishProgress(getDataSetName(), "Operation Complete", FloorPanel.Outcome.COMPLETE);
+	}
+
+	/** Any action in this panel clears a finished result left on the shared bar. */
+	public void clearProgressResult() {
+		controller.clearProgressResult();
+	}
+
+	/**
+	 * Reports a failed segmentation run: "Operation Failed" on the bar and a dialog.
+	 * Problems with the user's input ({@link util.UserInputException}) get a plain message and
+	 * no stack trace (printing one opens Fiji's Console); anything else is a bug, so its trace
+	 * is printed and the dialog says where to find it.
+	 */
+	private void reportOperationFailure(Exception e) {
+		controller.finishProgress(getDataSetName(), "Operation Failed", FloorPanel.Outcome.FAILED);
+		if (e instanceof util.UserInputException) {
+			runOnEdt(() -> JOptionPane.showMessageDialog(null, e.getMessage(),
+					"Cannot Run Operation", JOptionPane.WARNING_MESSAGE));
+			return;
+		}
+		System.err.println("[Seg2Tracks] Operation failed on " + getDataSetName() + ":");
+		e.printStackTrace();
+		String what = (e.getMessage() != null) ? e.getMessage() : e.toString();
+		runOnEdt(() -> JOptionPane.showMessageDialog(null, "Operation failed:\n\n" + what
+				+ "\n\nTechnical details were written to the Fiji Console."
+				+ "\nPlease include them if you report this problem.",
+				"Operation Error", JOptionPane.ERROR_MESSAGE));
+	}
+
 	public void setRunData(int type, DataSet dataSet) {
 		this.dataSet = dataSet;
 		if (type == 1) loadedInternalData = true;
@@ -520,6 +555,7 @@ public class OperationController {
 			//System.out.println("Input File Path: " + inputFilePath);
 		
 			//THREAD
+			controller.startProgress(getDataSetName());
 			runExternalSegmentation = runExternalSegmentationThread();
 			runExternalSegmentation.execute();
 			panel.updateSegmentationLoaded(0, 4); // show Cancel button while running
@@ -538,15 +574,10 @@ public class OperationController {
 					return null;
 				}
 				catch (InterruptedException e) {
-					System.out.println("INTERRUPTED");
-					if (isCancelled()) {
-						System.out.println("CANCELLED");
-					};
-					return null;
+					return null; // cancelled via Cancel; the bar already says "Operation Cancelled"
 				}
 				catch (Exception e) {
-					System.err.println("[Seg2Tracks] External segmentation failed:");
-					e.printStackTrace();
+					if (!isCancelled()) reportOperationFailure(e);
 					runOnEdt(controller::allSegmentationLoaded);
 					return null;
 				}
@@ -560,6 +591,7 @@ public class OperationController {
 	
 	public void cancelExternalSegmentation() {
 		if (runExternalSegmentation != null) runExternalSegmentation.cancel(true);
+		controller.finishProgress(getDataSetName(), "Operation Cancelled", FloorPanel.Outcome.CANCELLED);
 		panel.updateSegmentationLoaded(0, 0); // reset button to "Run" — no data produced
 	}
 		
@@ -589,6 +621,7 @@ public class OperationController {
 			//System.out.println("Input File Path: " + inputFilePath);
 			
 			//THREAD
+			controller.startProgress(getDataSetName());
 			runInternalSegmentation = runInternalSegmentationThread();
 			runInternalSegmentation.execute();
 			panel.updateSegmentationLoaded(1, 4);
@@ -607,8 +640,7 @@ public class OperationController {
 					return null;
 				}
 				catch (Exception e) {
-					System.err.println("[Seg2Tracks] Internal segmentation failed:");
-					e.printStackTrace();
+					if (!isCancelled()) reportOperationFailure(e);
 					runOnEdt(controller::allSegmentationLoaded);
 					return null;
 				}

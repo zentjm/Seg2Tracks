@@ -162,6 +162,29 @@ public class Seg2TracksController {
 	public JProgressBar getProgressBar() {
 		return view.getProgressBar();
 	}
+
+	// ── Shared progress bar status ────────────────────────────────────────────
+	// One bar serves every panel; the status line beside it is managed by FloorPanel.
+	// A run calls startProgress(); its end calls finishProgress(); the result stays until the
+	// next button press in a Seg2Tracks panel (clearProgressResult()), then "Ready".
+
+	/** Clears the bar and status line for a run that is about to start. Call on the EDT. */
+	public void startProgress(String panelName) {
+		floorPanel.startRun(panelName);
+	}
+
+	/**
+	 * Shows a finished run's result, prefixed by the panel name, e.g. "Set 2: Operation
+	 * Complete". Safe to call from any thread.
+	 */
+	public void finishProgress(String panelName, String result, FloorPanel.Outcome outcome) {
+		javax.swing.SwingUtilities.invokeLater(() -> floorPanel.showResult(panelName, result, outcome));
+	}
+
+	/** Called on any button press in a Seg2Tracks panel: a shown result gives way to "Ready". */
+	public void clearProgressResult() {
+		floorPanel.clearResult();
+	}
 	
 	//pushes pre-checked input file to the model
 	public void setOutputFilePath(String outputFilePath) {

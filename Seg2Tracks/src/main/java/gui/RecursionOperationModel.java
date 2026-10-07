@@ -83,7 +83,7 @@ public class RecursionOperationModel extends OperationModel {
 
 		DataSet priorDataSet = controller.getPriorDataSet();
 		if (priorDataSet == null || priorDataSet.getLinkSetList().isEmpty()) {
-			throw new Exception(
+			throw new util.UserInputException(
 				"No prior segmentation found. Complete segmentation on the previous panel before running recursive segmentation.");
 		}
 
@@ -144,7 +144,7 @@ public class RecursionOperationModel extends OperationModel {
 
 		dataSet = combinedDataSet;
 		controller.setRunData(runType, dataSet);
-		progressBar.setValue(progressBar.getMaximum());
+		controller.operationComplete();
 	}
 
 	/**

@@ -6,8 +6,9 @@ package analysisMethod;
  * no stack trace is printed, since printing one makes Fiji open its Console window.
  * <p>
  * Anything else thrown from an analysis is treated as a bug and its stack trace is logged.
+ * The analysis-specific case of {@link util.UserInputException}.
  */
-public class AnalysisInputException extends IllegalStateException {
+public class AnalysisInputException extends util.UserInputException {
 
 	private static final long serialVersionUID = 1L;
 

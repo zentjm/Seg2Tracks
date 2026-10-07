@@ -83,6 +83,19 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
 
 ### Fixed
 
+- **Progress bar left stale, unnamed, or frozen** — the single shared progress bar kept the last
+  result ("Operation Complete") until the user switched menus, did not say which panel it referred
+  to, never showed completion for recursive segmentation, and froze mid-run when a segmentation
+  failed (only a stack trace, which opened Fiji's Console). Now: a run clears the bar when it
+  starts; its result is shown with the panel name ("Set 2: Operation Complete", "Analysis 1:
+  Analysis Failed", "Set 1: Operation Cancelled") and stays until the next button press in a
+  Seg2Tracks panel; recursive runs report completion; failed segmentation shows "Operation Failed"
+  and a dialog, with input problems (`util.UserInputException`, now also the parent of
+  `AnalysisInputException`, and used for "No prior segmentation found") shown plainly and only
+  unexpected errors printing a trace. Cancel no longer prints debug lines. The text moved off the
+  bar into a status label beside it ("Set 2 — Segmentation" while running; green ✓ / red ✕ / grey
+  results; "Ready" when idle), and the bar now stretches to the window width: `FloorPanel` had no
+  layout manager set, so its GridBag constraints were ignored and the bar stayed at minimum width.
 - **Expected analysis problems no longer open Fiji's Console** — the analysis error handler
   printed a stack trace for every failure, so the intended "subsegments have no internal
   segmentation" message also opened the Console with a Java trace. Input problems now throw

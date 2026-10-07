@@ -178,6 +178,9 @@ public class HeadPanel extends JPanel implements ActionListener, Observer {
 
 	@Override
 	public void actionPerformed(ActionEvent e) {
+		// A button press starts a new action: clear a finished result on the shared progress bar.
+		// (Buttons only: some dropdowns also fire action events when refreshed programmatically.)
+		if (e.getSource() instanceof javax.swing.AbstractButton) controller.clearProgressResult();
 		if (e.getSource() == buttonHelp) {
 			controller.openHelpMenu();
 		}

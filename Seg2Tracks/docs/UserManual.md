@@ -124,7 +124,7 @@ The main window contains:
 
 - **Header bar** — citation reference and **User Manual** button.
 - **One or more Operation Panels** — each representing one channel or dataset. Panels are added or removed with **Add Panel** / **Remove Panel** in the footer.
-- **Footer bar** — progress bar, **DATA ANALYSIS >>** button (enabled once all required segmentation steps are complete), and panel management buttons.
+- **Footer bar** — progress bar, **DATA ANALYSIS >>** button (enabled once all required segmentation steps are complete), and panel management buttons. The progress bar is shared by all panels. The status line beside it shows what is running (for example *Set 2 — Segmentation*), then the result with the panel's name (green *Set 2: Operation Complete*, red if it failed), which stays until you press the next button; otherwise it reads *Ready*.
 
 ### Operation Panel rows
 

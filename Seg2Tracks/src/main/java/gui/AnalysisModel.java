@@ -119,8 +119,7 @@ public class AnalysisModel extends Observable {
 		controller.setWorkbook(workbook.getWorkbook());
 
 		// Update progress bar to completion
-		progressBar.setValue(progressBar.getMaximum());
-		progressBar.setString("Analysis Complete");
+		controller.analysisComplete(); // "<panel>: Analysis Complete", until the next action
 	}
 		
 	public void setOverride(boolean override) {
