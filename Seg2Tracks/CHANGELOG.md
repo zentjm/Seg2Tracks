@@ -11,6 +11,10 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
 
 ### Added
 
+- **Last release in the header** — the main window's header shows "Last release: v0.5.4,
+  2026-10-06" to the right of the User Manual and Change Log buttons, replacing the
+  "Please cite: publication pending" label on the left. Read from `lastReleaseVersion` /
+  `lastReleaseDate` in `version.properties`.
 - **Click-to-trace freehand drawing** — the Freehand tool in Manual and Recursive Manual
   Segmentation no longer needs the mouse held down: click to start, move to trace, click again
   (or return to the start point) to close; Esc discards the trace. Replaces ImageJ's

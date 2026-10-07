@@ -28,6 +28,10 @@ guide, use the **User Manual** button.
 
 - Fixed **older datasets failing to load**. Save files created before v0.5.1 stopped opening in later versions (Load Data silently did nothing). They now load correctly again, and new save files continue to work — both old and new formats are read interchangeably.
 
+### Main window
+
+- The header now shows the **last release** (version and date) next to the **User Manual** and **Change Log** buttons, in place of the "publication pending" note.
+
 ### Progress bar
 
 - The progress bar is now **wider**, and its text is shown in a status line beside it: what is running (for example *Set 2 — Segmentation*), the result in colour (green for complete, red for failed), and *Ready* when idle.

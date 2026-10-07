@@ -27,7 +27,13 @@ to the Fiji update site server**. Local rebuilds and `mvn install` into the loca
 close a version; keep adding to it until it is uploaded. After an upload, new changes go under
 the next patch version: bump `pom.xml`, the header line of both `UserManual.md` copies and both
 `ChangeLog.md` copies (`src/main/resources/` and `docs/`, kept identical), and add a new section
-to `CHANGELOG.md`. Latest uploaded to the update site: **0.5.3**. Current in-progress version: **0.5.4**.
+to `CHANGELOG.md`. **At each upload**, also set `lastReleaseVersion` / `lastReleaseDate` in
+`src/main/resources/version.properties` (shown as "Last release: vX, date" in the main window's
+header, right of the User Manual / Change Log buttons; deliberately not derived from `pom.xml`,
+so it keeps showing the last real release while the next version is in development), and replace
+"Publication pending" with "Released <date>" in the ChangeLog/UserManual headers (and the
+UserManual footer line).
+Latest uploaded to the update site: **0.5.3**. Current in-progress version: **0.5.4**.
 **Manual segmentation cannot be tested in the IDE** — requires a live Fiji instance
 (ImageJ's `IJ` singleton and `WindowManager` are not available headless).
 

@@ -20,7 +20,7 @@ import util.FileSelectionPanel;
 import util.FileType;
 
 /**
- * The top header panel of the main Seg2Tracks window. Displays citation reference, help button,
+ * The top header panel of the main Seg2Tracks window. Displays the help and change-log buttons, the last release,
  * and output file selection controls. Changes layout between segmentation mode (minimal) and
  * analysis mode (with output directory picker).
  */
@@ -29,8 +29,9 @@ public class HeadPanel extends JPanel implements ActionListener, Observer {
 	GridBagConstraints constraints = new GridBagConstraints();
 	Seg2TracksController controller;
 	
-	//Label
-	JLabel citationReference = new JLabel("<html>Please cite: <i>publication pending</i></html>");
+	// Last release ("Last release: v0.5.4, 2026-10-06"), from version.properties; shown to the
+	// right of the User Manual and Change Log buttons.
+	JLabel releaseLabel = new JLabel(lastReleaseText());
 	
 	//Help Button
 	JButton buttonHelp = new JButton ("User Manual");
@@ -51,6 +52,25 @@ public class HeadPanel extends JPanel implements ActionListener, Observer {
 	String outputFilePath;
 	//File outputFile;
 	
+	/**
+	 * "Last release: v0.5.4, 2026-10-06" from {@code version.properties}
+	 * ({@code lastReleaseVersion}, {@code lastReleaseDate}), or "" if unavailable.
+	 */
+	private static String lastReleaseText() {
+		try (java.io.InputStream is = HeadPanel.class.getResourceAsStream("/version.properties")) {
+			if (is == null) return "";
+			java.util.Properties props = new java.util.Properties();
+			props.load(is);
+			String v = props.getProperty("lastReleaseVersion", "").trim();
+			String d = props.getProperty("lastReleaseDate", "").trim();
+			if (v.isEmpty() && d.isEmpty()) return "";
+			String text = "Last release: " + (v.isEmpty() ? "" : "v" + v) + (v.isEmpty() || d.isEmpty() ? "" : ", ") + d;
+			return "<html><i>" + text + "</i></html>";
+		} catch (java.io.IOException e) {
+			return "";
+		}
+	}
+
 	public HeadPanel(Seg2TracksController controller) {
 		this.controller = controller;
 		initialize();
@@ -87,19 +107,19 @@ public class HeadPanel extends JPanel implements ActionListener, Observer {
 		//ROW 0
 		constraints.gridy = 0;
 		  
-		//Panel title
+		//Help button
         constraints.gridx = 0;
-        constraints.anchor = GridBagConstraints.LINE_START;
-        add(citationReference, constraints);
-        
-        //Help button
-        constraints.gridx = 1;
         constraints.anchor = GridBagConstraints.LINE_END;
         add(buttonHelp, constraints);
 
         //Change Log button
-        constraints.gridx = 2;
+        constraints.gridx = 1;
         add(buttonChangeLog, constraints);
+
+        //Last release, to the right of the buttons
+        constraints.gridx = 2;
+        constraints.anchor = GridBagConstraints.LINE_START;
+        add(releaseLabel, constraints);
 
         //Add action listeners
         buttonHelp.addActionListener(this);
@@ -114,19 +134,19 @@ public class HeadPanel extends JPanel implements ActionListener, Observer {
 		//ROW 0
 		constraints.gridy = 0;
 
-		//Panel title
+		//Help button
         constraints.gridx = 0;
-        constraints.anchor = GridBagConstraints.LINE_START;
-        add(citationReference, constraints);
-
-        //Help button
-        constraints.gridx = 1;
         constraints.anchor = GridBagConstraints.LINE_END;
         add(buttonHelp, constraints);
 
         //Change Log button
-        constraints.gridx = 2;
+        constraints.gridx = 1;
         add(buttonChangeLog, constraints);
+
+        //Last release, to the right of the buttons
+        constraints.gridx = 2;
+        constraints.anchor = GridBagConstraints.LINE_START;
+        add(releaseLabel, constraints);
 
         repaint();
 		revalidate();

@@ -122,7 +122,7 @@ Multiple independent panels can run in parallel (e.g., two different channels fr
 
 The main window contains:
 
-- **Header bar** — citation reference and **User Manual** button.
+- **Header bar** — **User Manual** and **Change Log** buttons, and the last release (version and date).
 - **One or more Operation Panels** — each representing one channel or dataset. Panels are added or removed with **Add Panel** / **Remove Panel** in the footer.
 - **Footer bar** — progress bar, **DATA ANALYSIS >>** button (enabled once all required segmentation steps are complete), and panel management buttons. The progress bar is shared by all panels. The status line beside it shows what is running (for example *Set 2 — Segmentation*), then the result with the panel's name (green *Set 2: Operation Complete*, red if it failed), which stays until you press the next button; otherwise it reads *Ready*.
 
@@ -627,4 +627,4 @@ This was a known issue in versions prior to 0.5.0. The recursion panel now only 
 
 ---
 
-*Seg2Tracks — publication pending*
+*Seg2Tracks — version 0.5.4, released 2026-10-06*
