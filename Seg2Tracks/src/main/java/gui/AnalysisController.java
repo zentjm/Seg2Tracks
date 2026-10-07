@@ -253,6 +253,26 @@ public class AnalysisController implements ActionListener {
 		dataSelections[index] = selection;
 	}
 
+	/** True if the selected analysis method analyses subsegments (needs RecursiveDataSet input). */
+	public boolean isRecursiveMethodSelected() {
+		return analysisMethods[analysisMethodSelection] instanceof analysisMethod.RecursiveAnalysisMethod;
+	}
+
+	/**
+	 * Which datasets the selected analysis method can use as input, one flag per dataset (same
+	 * order as the input dropdown). Recursive analyses need a subsegmentation dataset
+	 * ({@link dataStructure.RecursiveDataSet}); any dataset is usable by the others.
+	 */
+	public boolean[] getInputAvailability() {
+		int n = (dataSets == null) ? 0 : dataSets.length;
+		boolean recursive = isRecursiveMethodSelected();
+		boolean[] available = new boolean[n];
+		for (int i = 0; i < n; i++) {
+			available[i] = !recursive || dataSets[i] instanceof dataStructure.RecursiveDataSet;
+		}
+		return available;
+	}
+
 	/** Returns the AnalysisPanel view component to the parent Seg2TracksPanel. */
 	public AnalysisPanel getPanel() {
 		return panel;
@@ -345,10 +365,21 @@ public class AnalysisController implements ActionListener {
 					get();
 				} catch (java.util.concurrent.ExecutionException e) {
 					Throwable cause = (e.getCause() != null) ? e.getCause() : e;
-					cause.printStackTrace();
 					getProgressBar().setString("Analysis Failed");
-					JOptionPane.showMessageDialog(null, "Analysis failed:\n\n" + cause.getMessage(),
-						"Analysis Error", JOptionPane.ERROR_MESSAGE);
+					if (cause instanceof analysisMethod.AnalysisInputException) {
+						// Expected problem with the input: the message says what to do. No stack
+						// trace, which would pop up Fiji's Console and confuse the user.
+						JOptionPane.showMessageDialog(null, cause.getMessage(),
+							"Cannot Run Analysis", JOptionPane.WARNING_MESSAGE);
+					} else {
+						// Unexpected: keep the trace for bug reports, and say where it went.
+						cause.printStackTrace();
+						String what = (cause.getMessage() != null) ? cause.getMessage() : cause.toString();
+						JOptionPane.showMessageDialog(null, "Analysis failed:\n\n" + what
+							+ "\n\nTechnical details were written to the Fiji Console."
+							+ "\nPlease include them if you report this problem.",
+							"Analysis Error", JOptionPane.ERROR_MESSAGE);
+					}
 				} catch (InterruptedException e) {
 					Thread.currentThread().interrupt();
 				}

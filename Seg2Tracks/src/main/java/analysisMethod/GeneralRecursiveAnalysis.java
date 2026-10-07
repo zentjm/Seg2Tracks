@@ -93,7 +93,7 @@ public class GeneralRecursiveAnalysis extends RecursiveAnalysisMethod {
 	 * outline is the intended final boundary, the user must say so explicitly by
 	 * running "Convert SARN to Segmentation".
 	 *
-	 * @throws IllegalStateException if any subsegment has no internal perimeter
+	 * @throws AnalysisInputException if any subsegment has no internal perimeter
 	 */
 	@Override
 	public void initialize(ImagePlus target, RecursiveDataSet recursiveDataSet,
@@ -106,7 +106,7 @@ public class GeneralRecursiveAnalysis extends RecursiveAnalysisMethod {
 			}
 		}
 		if (missing > 0) {
-			throw new IllegalStateException(missing + " of " + total
+			throw new AnalysisInputException(missing + " of " + total
 				+ " subsegments have no internal segmentation, so their area cannot be measured."
 				+ "\n\nRun internal segmentation on the subsegmentation panel first. If the SARN"
 				+ " outline is the intended final boundary, use \"Convert SARN to Segmentation\".");

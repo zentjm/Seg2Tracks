@@ -161,6 +161,25 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 		this.workbook = workbook;
 	}
 
+	/**
+	 * Checks that the analysis was given a subsegmentation dataset. Choosing a regular
+	 * segmentation dataset in the analysis panel's input dropdown is a user mistake, not a bug,
+	 * so it is reported as an {@link AnalysisInputException} with guidance (no stack trace).
+	 */
+	private void requireRecursiveInput(DataSet[] dataSets) {
+		DataSet input = (dataSets == null || dataSets.length == 0) ? null : dataSets[0];
+		if (input instanceof RecursiveDataSet) return;
+		String name = (input == null) ? null : input.getName();
+		String chosen = (input == null)
+				? "No dataset was selected (or the selected panel has no data)."
+				: "The selected dataset" + (name != null ? " \"" + name + "\"" : "")
+					+ " is a regular segmentation, not a subsegmentation.";
+		throw new AnalysisInputException(chosen
+				+ "\n\n\"" + methodName + "\" analyses subsegments, so its input must be the dataset"
+				+ "\nfrom a subsegmentation panel. Choose that dataset in the analysis panel's"
+				+ "\ninput dropdown and run the analysis again.");
+	}
+
 	// ── Bridge overrides for the standard AnalysisMethod interface ────────────
 	// AnalysisModel.runIt() calls initialize(ImagePlus, DataSet[], JProgressBar).
 	// These overrides extract dataSets[0] as a RecursiveDataSet and delegate.
@@ -171,15 +190,12 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	 * Extracts the first element of {@code dataSets} as a {@link RecursiveDataSet}
 	 * and delegates to the typed {@link #initialize(ImagePlus, RecursiveDataSet, JProgressBar)}.
 	 *
-	 * @throws IllegalArgumentException if {@code dataSets} is null/empty or if
-	 *                                  {@code dataSets[0]} is not a RecursiveDataSet
+	 * @throws AnalysisInputException if {@code dataSets} is null/empty or if
+	 *                                 {@code dataSets[0]} is not a RecursiveDataSet
 	 */
 	@Override
 	public void initialize(ImagePlus target, DataSet[] dataSets, JProgressBar progressBar) {
-		if (dataSets == null || dataSets.length == 0 || !(dataSets[0] instanceof RecursiveDataSet)) {
-			throw new IllegalArgumentException(
-				getClass().getSimpleName() + " requires a RecursiveDataSet as its first input channel.");
-		}
+		requireRecursiveInput(dataSets);
 		initialize(target, (RecursiveDataSet) dataSets[0], progressBar);
 	}
 
@@ -188,15 +204,12 @@ public abstract class RecursiveAnalysisMethod extends AnalysisMethod {
 	 * Extracts {@code dataSets[0]} as a {@link RecursiveDataSet} and delegates to
 	 * {@link #initialize(ImagePlus, RecursiveDataSet, JProgressBar, ResultWorkbook)}.
 	 *
-	 * @throws IllegalArgumentException if {@code dataSets[0]} is not a RecursiveDataSet
+	 * @throws AnalysisInputException if {@code dataSets[0]} is not a RecursiveDataSet
 	 */
 	@Override
 	public void initialize(ImagePlus target, DataSet[] dataSets, JProgressBar progressBar,
 	                       ResultWorkbook workbook) {
-		if (dataSets == null || dataSets.length == 0 || !(dataSets[0] instanceof RecursiveDataSet)) {
-			throw new IllegalArgumentException(
-				getClass().getSimpleName() + " requires a RecursiveDataSet as its first input channel.");
-		}
+		requireRecursiveInput(dataSets);
 		initialize(target, (RecursiveDataSet) dataSets[0], progressBar, workbook);
 	}
 

@@ -183,9 +183,18 @@ public class AnalysisPanel extends JPanel implements ActionListener, Observer {
 
 		channelNames = controller.getChannels();
 
-		// Build one combobox per channel input
+		// Build one combobox per channel input. Datasets the method cannot use (e.g. regular
+		// datasets for a recursive analysis) stay listed but greyed out and unselectable.
+		boolean[] available = controller.getInputAvailability();
 		for (int i = 0; i < channelNames.length; i++) {
-			JComboBox combo = new JComboBox(channelList);
+			InputComboBox combo = new InputComboBox(channelList, available);
+			int first = combo.firstAvailable();
+			if (first > 0) combo.setSelectedIndex(first); // default entry is unusable
+			if (first >= 0) controller.setChannelMethodSelection(i, first);
+			if (controller.isRecursiveMethodSelected()) {
+				combo.setToolTipText("This analysis needs a subsegmentation dataset; "
+						+ "regular datasets are greyed out.");
+			}
 			combo.addActionListener(this);
 			comboBoxChannelSelections.add(combo);
 		}

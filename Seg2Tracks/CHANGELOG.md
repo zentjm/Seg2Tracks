@@ -83,6 +83,18 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
 
 ### Fixed
 
+- **Expected analysis problems no longer open Fiji's Console** — the analysis error handler
+  printed a stack trace for every failure, so the intended "subsegments have no internal
+  segmentation" message also opened the Console with a Java trace. Input problems now throw
+  `AnalysisInputException` and get a plain warning dialog ("Cannot Run Analysis"); only unexpected
+  errors print a trace, and their dialog says the details are in the Console. Choosing a regular
+  (non-subsegmentation) dataset as the input to a recursive analysis is now reported the same way,
+  naming the chosen dataset and saying to pick the subsegmentation panel's dataset
+  (`RecursiveAnalysisMethod.requireRecursiveInput`); it used to throw an
+  `IllegalArgumentException` with a stack trace. Better still, the mistake is now prevented: for
+  recursive analyses the input dropdown greys out non-subsegmentation datasets and refuses to
+  select them (`InputComboBox`, `AnalysisController.getInputAvailability()`), starting on the
+  first usable dataset. The message remains as a backstop (e.g. no subsegmentation exists).
 - **Guided Calibration bypassed the settings dialogs** — "Apply to Settings" in both Guided
   Calibrations (Object Identification and Boundary Cleanup) wrote straight to the stored settings,
   leaving the open settings dialog showing stale values and skipping its "this will clear loaded

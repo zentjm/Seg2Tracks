@@ -41,7 +41,7 @@ guide, use the **User Manual** button.
 ### Analysis and export
 
 - Fixed **analysis failing with no export and no message**. If an analysis hits an error, Seg2Tracks now shows an "Analysis failed" dialog explaining the cause instead of silently producing nothing.
-- **General Recursive Segmentation Data** now tells you when subsegments have no internal segmentation (only a SARN outline), instead of failing silently. Run internal segmentation on the subsegmentation panel first, or, if the SARN outline is the boundary you want, use **Convert SARN to Segmentation**.
+- **General Recursive Segmentation Data** now tells you when subsegments have no internal segmentation (only a SARN outline), instead of failing silently. Run internal segmentation on the subsegmentation panel first, or, if the SARN outline is the boundary you want, use **Convert SARN to Segmentation**. This appears as a simple message; Fiji's Console window no longer opens for it. For General Recursive Segmentation Data, datasets that are not subsegmentations are now greyed out in the input dropdown, so the wrong one can't be chosen by mistake.
 - Fixed **Convert SARN to Segmentation placing subsegments in the wrong position** in subsegmentation mode.
 - Fixed **frame-level mean statistics** (e.g. per-frame mean area) that were computed incorrectly: each frame's mean reflected only the *last* object in that frame instead of averaging all of them. Every FrameSet mean column in exported results is now correct.
 - Fixed **missing measurements exported as 0**. When a value has not been computed, exported spreadsheets now show `NaN` (undefined) rather than `0`, so a missing measurement can no longer be mistaken for a genuine zero.

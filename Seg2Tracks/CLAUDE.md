@@ -246,7 +246,10 @@ data-changing event. `refreshSubsegmentationOnAllPanels()` is always called from
   to recover the UI from loading state.
 - **Analysis errors must reach the user**: `AnalysisController.runAnalysisThread()`'s
   `SwingWorker.done()` calls `get()` and shows an error dialog. Keep it: without it, any
-  exception in an analysis is swallowed and users just see "no export".
+  exception in an analysis is swallowed and users just see "no export". For problems with the
+  user's input, throw `analysisMethod.AnalysisInputException` with a user-facing message: it gets
+  a plain dialog and no stack trace (printing one opens Fiji's Console). Anything else is treated
+  as a bug and its trace is printed.
 - **No silent perimeter fallbacks in analysis**: `GeneralRecursiveAnalysis.initialize()` refuses
   to run if any subsegment lacks an internal perimeter (user decision, 2026-09-23). Do not add a
   fallback to the external/SARN perimeter; "Convert SARN to Segmentation" is the explicit path.

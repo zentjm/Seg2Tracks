@@ -556,7 +556,7 @@ Each Analysis Panel has a dropdown of available methods:
 | Method | Output |
 |---|---|
 | **General Segmentation Data** | Per-segment measurements (area, perimeter, centre coordinates, frame) for all detected objects. |
-| **General Recursive Segmentation Data** | Same as above but for subsegmentation results. |
+| **General Recursive Segmentation Data** | Same as above but for subsegmentation results. Its input must be a subsegmentation panel's dataset; other datasets are greyed out in the input dropdown. |
 | **External Segmentation Data** | Detailed measurements derived from the SARN envelope (shape descriptors, boundary coordinates). |
 | **Exterior Extraction** | Extracts pixel intensity data from within each SARN envelope. |
 | **Principle Component** | PCA-based shape analysis of object boundaries. |
