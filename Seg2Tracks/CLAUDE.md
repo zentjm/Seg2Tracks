@@ -283,6 +283,10 @@ data-changing event. `refreshSubsegmentationOnAllPanels()` is always called from
   Failed segmentation runs go through `OperationController.reportOperationFailure()`: a
   `util.UserInputException` gets a plain dialog and no stack trace; anything else prints its trace
   (Fiji opens its Console) and the dialog says so. Added 2026-10-06 at the user's request.
+- **Never add Log4j (or other logging backends) to `pom.xml`.** `mvn install` copies every
+  runtime dependency into `Fiji/jars`; an old `log4j-api` there broke Fiji's WebDAV uploader
+  (`commons-logging` 1.3.x calls newer Log4j API). Seg2Tracks logs nothing via Log4j. If Fiji
+  reports "Cannot create plugin: ...WebDAVUploader", look for stray `log4j-*.jar` in `Fiji/jars`.
 - **Tab encoding** — some source files use hard tabs. The Edit tool may fail to match indented
   code. Use `sed -i` for single-line substitutions in those files.
 - **`allSegmentationLoaded()`** is the correct hook for any logic that must run after any
