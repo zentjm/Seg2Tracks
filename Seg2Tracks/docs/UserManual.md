@@ -231,7 +231,7 @@ After either method, review the result and click **Send to Settings** to copy th
 
 ### Applying results
 
-The settings window steps aside while Guided Calibration is open; the preview image opens beside the calibration controls. Click **Send to Settings** to copy the current slider values into the Object ID Settings boxes and return to that window, then press **Apply** there to use them. Nothing changes until you press Apply, which is the only way settings are changed. Click **Close** to return without sending anything.
+Guided Calibration starts from the values currently in the settings boxes. The settings window steps aside while it is open; the preview image opens beside the calibration controls. Click **Send to Settings** to copy the current slider values into the Object ID Settings boxes and return to that window, then press **Apply** there to use them. Nothing changes until you press Apply, which is the only way settings are changed. Click **Close** to return without sending anything.
 
 ---
 
@@ -287,7 +287,7 @@ The value label next to each slider updates continuously while dragging.
 
 ### Applying results
 
-The settings window steps aside while Guided Calibration is open; the preview image opens beside the calibration controls. Click **Send to Settings** to copy the current slider values into the Boundary Cleanup Settings boxes and return to that window, then press **Apply** there to use them. Click **Close** to return without sending anything.
+Guided Calibration starts from the values currently in the settings boxes. The settings window steps aside while it is open; the preview image opens beside the calibration controls. Click **Send to Settings** to copy the current slider values into the Boundary Cleanup Settings boxes and return to that window, then press **Apply** there to use them. Click **Close** to return without sending anything.
 
 ---
 

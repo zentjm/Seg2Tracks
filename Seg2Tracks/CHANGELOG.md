@@ -95,7 +95,9 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
   Window handling: the settings dialog hides while its Guided Calibration is open and returns when
   it closes; Send to Settings closes the calibration and returns to the dialog; the ImageJ preview
   opens beside the controls (or staggered on narrow screens) with the controls in front
-  (`CalibrationWindows`), instead of on top of them.
+  (`CalibrationWindows`), instead of on top of them. Guided Calibration starts from the values in
+  its settings dialog's boxes (including unapplied edits and the Invert Intensity checkbox, which
+  the preview and auto-calibration also use), not from the stored settings.
 - **Preview outlines drawn half a pixel off toward +x/+y** — `ManualSegmentationController
   .getPolygonRoi()` (used by Preview and Manual Segmentation) built `Roi.POLYLINE` ROIs from
   pixel-corner perimeters; ImageJ draws line-type vertices at pixel centres, so the outline showed a

@@ -204,10 +204,10 @@ public class BoundaryCleanupCalibration extends JFrame implements ChangeListener
 		setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 		setResizable(true);
 
-		int initFraction = clamp((int) Math.round(controller.getSearchFraction() * 100 * SEARCH_FRACTION_SCALE),
+		int initFraction = clamp((int) Math.round(settingsPanel.boxSearchFractionPct() * SEARCH_FRACTION_SCALE),
 		                          1, 50 * SEARCH_FRACTION_SCALE);
-		int initCeiling  = clamp(controller.getSearchCeiling(), 50, 2000);
-		int initEpsilon  = clamp((int) Math.round(controller.getSimplificationEpsilon() * EPSILON_SCALE),
+		int initCeiling  = clamp(settingsPanel.boxSearchCeiling(), 50, 2000);
+		int initEpsilon  = clamp((int) Math.round(settingsPanel.boxEpsilon() * EPSILON_SCALE),
 		                          1, 50);
 
 		sliderSearchFraction = new JSlider(1, 50 * SEARCH_FRACTION_SCALE, initFraction);

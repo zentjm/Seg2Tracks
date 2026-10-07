@@ -113,6 +113,27 @@ public class CalibrationPanel extends JFrame implements ActionListener {
 		toFront();
 	}
 
+	// ── Current box values (Guided Calibration starts from these) ─────────────
+	// Each falls back to the stored setting if its box does not hold a valid number.
+
+	double boxSigma() {
+		return SettingsFields.parseOr(gaussianBlurSigma, controller.getGaussianBlurSigma());
+	}
+
+	double boxThresholdPct() {
+		return SettingsFields.parseOr(maximumFinderTolerance, controller.getMaximumFinderTolerance() * 100);
+	}
+
+	double boxRecursiveTolerancePct() {
+		return isRecursive
+				? SettingsFields.parseOr(recursiveTolerancePct, controller.getRecursiveTolerancePct())
+				: controller.getRecursiveTolerancePct();
+	}
+
+	boolean boxInvertIntensity() {
+		return checkBoxInvertIntensity.isSelected();
+	}
+
 	/**
 	 * Enables Apply only while the boxes hold valid numbers that differ from the stored
 	 * settings, and shows whether there are unapplied changes.

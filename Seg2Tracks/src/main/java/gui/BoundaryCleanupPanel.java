@@ -89,6 +89,21 @@ public class BoundaryCleanupPanel extends JFrame implements ActionListener {
 		toFront();
 	}
 
+	// ── Current box values (Guided Calibration starts from these) ─────────────
+	// Each falls back to the stored setting if its box does not hold a valid number.
+
+	double boxSearchFractionPct() {
+		return SettingsFields.parseOr(searchFraction, controller.getSearchFraction() * 100);
+	}
+
+	int boxSearchCeiling() {
+		return (int) Math.round(SettingsFields.parseOr(searchCeiling, controller.getSearchCeiling()));
+	}
+
+	double boxEpsilon() {
+		return SettingsFields.parseOr(epsilon, controller.getSimplificationEpsilon());
+	}
+
 	/**
 	 * Enables Apply only while the boxes hold valid positive numbers that differ from the
 	 * stored settings, and shows whether there are unapplied changes.

@@ -235,12 +235,12 @@ public class GuidedCalibration extends JFrame implements ChangeListener, ActionL
 		setDefaultCloseOperation(DISPOSE_ON_CLOSE);
 		setResizable(true);
 
-		// Seed sliders from current controller values
-		int initSigma  = clamp((int) Math.round(controller.getGaussianBlurSigma() * SIGMA_SCALE),
+		// Seed sliders from the settings window's boxes (which may hold unapplied values)
+		int initSigma  = clamp((int) Math.round(settingsPanel.boxSigma() * SIGMA_SCALE),
 		                       1, 100);
-		int initThresh = clamp((int) Math.round(controller.getMaximumFinderTolerance() * 100),
+		int initThresh = clamp((int) Math.round(settingsPanel.boxThresholdPct()),
 		                       0, 100);
-		int initRecTol = clamp((int) Math.round(controller.getRecursiveTolerancePct()),
+		int initRecTol = clamp((int) Math.round(settingsPanel.boxRecursiveTolerancePct()),
 		                       0, 50);
 
 		// Sliders
@@ -461,7 +461,7 @@ public class GuidedCalibration extends JFrame implements ChangeListener, ActionL
 		// ── Display processor ─────────────────────────────────────────────────
 		// Original pixel values for the ImagePlus window; possibly inverted.
 		ImageProcessor display = virtualStack.getProcessor(frame).duplicate();
-		if (controller.getInvertIntensity()) display.invert();
+		if (settingsPanel.boxInvertIntensity()) display.invert();
 
 		// Open or update the preview ImagePlus
 		String title = "Object ID Preview — Frame " + frame;
@@ -707,7 +707,7 @@ public class GuidedCalibration extends JFrame implements ChangeListener, ActionL
 	 */
 	private int quickCount(int frameNo, double sigma, double thresh, double recTolPct) {
 		ImageProcessor proc = virtualStack.getProcessor(frameNo).duplicate();
-		if (controller.getInvertIntensity()) proc.invert();
+		if (settingsPanel.boxInvertIntensity()) proc.invert();
 
 		ImageProcessor blurred = proc.duplicate();
 		new GaussianBlur().blurGaussian(blurred, sigma);
@@ -890,7 +890,7 @@ public class GuidedCalibration extends JFrame implements ChangeListener, ActionL
 			statusLabel.setText("No external segmentation DataSet loaded.");
 			return;
 		}
-		boolean invert = controller.getInvertIntensity();
+		boolean invert = settingsPanel.boxInvertIntensity();
 
 		setAllControlsEnabled(false);
 		statusLabel.setText("Auto-calibrating from DataSet…");

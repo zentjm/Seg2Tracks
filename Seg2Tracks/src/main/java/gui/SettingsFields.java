@@ -30,6 +30,12 @@ final class SettingsFields {
 		return BigDecimal.valueOf(rounded).stripTrailingZeros().toPlainString();
 	}
 
+	/** The box's value as a number, or {@code fallback} if it does not parse. */
+	static double parseOr(JTextField field, double fallback) {
+		try { return Double.parseDouble(field.getText().trim()); }
+		catch (NumberFormatException e) { return fallback; }
+	}
+
 	/** True if two settings values are equal to within display precision. */
 	static boolean same(double a, double b) {
 		return Math.abs(a - b) <= 1e-6 * Math.max(1.0, Math.max(Math.abs(a), Math.abs(b)));
