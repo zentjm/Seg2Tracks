@@ -83,6 +83,19 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
 
 ### Fixed
 
+- **Guided Calibration bypassed the settings dialogs** — "Apply to Settings" in both Guided
+  Calibrations (Object Identification and Boundary Cleanup) wrote straight to the stored settings,
+  leaving the open settings dialog showing stale values and skipping its "this will clear loaded
+  segmentations" warning. The button is now **Send to Settings** and only fills the dialog's text
+  boxes (`receiveCalibration()`); the dialog's **Apply** is the single path into the settings.
+  Apply is enabled only while the boxes hold valid values that differ from the stored ones
+  (`SettingsFields`); the status line shows "Changes not applied yet" or a validation error
+  instead of the old one-shot "New values applied". Invert Intensity is now applied with Apply
+  rather than immediately. After clearing loaded data once, Apply no longer warns again.
+  Window handling: the settings dialog hides while its Guided Calibration is open and returns when
+  it closes; Send to Settings closes the calibration and returns to the dialog; the ImageJ preview
+  opens beside the controls (or staggered on narrow screens) with the controls in front
+  (`CalibrationWindows`), instead of on top of them.
 - **Preview outlines drawn half a pixel off toward +x/+y** — `ManualSegmentationController
   .getPolygonRoi()` (used by Preview and Manual Segmentation) built `Roi.POLYLINE` ROIs from
   pixel-corner perimeters; ImageJ draws line-type vertices at pixel centres, so the outline showed a

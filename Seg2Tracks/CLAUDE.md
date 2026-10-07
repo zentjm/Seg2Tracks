@@ -253,6 +253,13 @@ data-changing event. `refreshSubsegmentationOnAllPanels()` is always called from
 - **Never share a perimeter array between internal and external**: `translateAndAccumulate()`
   offsets both in place, so an aliased array is shifted twice. Always deep-copy (see
   `SARNtoSegmentationConversion.segmentation()`).
+- **Settings dialogs: the text boxes are the single path into stored settings.**
+  `CalibrationPanel` (Object ID) and `BoundaryCleanupPanel`: Apply is enabled only while the boxes
+  hold valid values that differ from the controller (`SettingsFields`). Guided Calibrations
+  (`GuidedCalibration`, `BoundaryCleanupCalibration`) must never call `controller.set*()`: their
+  "Send to Settings" calls the parent dialog's `receiveCalibration()` and closes. While a Guided
+  Calibration is open its settings dialog is hidden (restored in its `dispose()`); windows are
+  placed by `CalibrationWindows`. User decision 2026-10-06.
 - **Tab encoding** — some source files use hard tabs. The Edit tool may fail to match indented
   code. Use `sed -i` for single-line substitutions in those files.
 - **`allSegmentationLoaded()`** is the correct hook for any logic that must run after any

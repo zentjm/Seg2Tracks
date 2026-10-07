@@ -1,6 +1,5 @@
 package gui;
 
-import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
@@ -88,13 +87,56 @@ public class CalibrationPanel extends JFrame implements ActionListener {
 
 	/** Populates fields from the controller's current stored values. */
 	public void initialize() {
-		gaussianBlurSigma.setText("" + controller.getGaussianBlurSigma());
+		gaussianBlurSigma.setText(SettingsFields.format(controller.getGaussianBlurSigma()));
 		// Threshold stored as fraction [0–1]; display as percent.
-		maximumFinderTolerance.setText("" + (controller.getMaximumFinderTolerance() * 100));
+		maximumFinderTolerance.setText(SettingsFields.format(controller.getMaximumFinderTolerance() * 100));
 		if (isRecursive) {
-			recursiveTolerancePct.setText("" + controller.getRecursiveTolerancePct());
+			recursiveTolerancePct.setText(SettingsFields.format(controller.getRecursiveTolerancePct()));
 		}
 		checkBoxInvertIntensity.setSelected(controller.getInvertIntensity());
+	}
+
+	/**
+	 * Receives values from Guided Calibration's "Send to Settings": fills the boxes only.
+	 * Nothing is stored until the user presses Apply here, so these boxes stay the single
+	 * path into the settings (and the loaded-data warning in {@link #setCalibration} applies).
+	 *
+	 * @param sigma          Gaussian blur sigma
+	 * @param thresholdPct   threshold, in percent
+	 * @param recTolPct      recursive tolerance in percent (ignored unless recursive)
+	 */
+	public void receiveCalibration(double sigma, double thresholdPct, double recTolPct) {
+		gaussianBlurSigma.setText(SettingsFields.format(sigma));
+		maximumFinderTolerance.setText(SettingsFields.format(thresholdPct));
+		if (isRecursive) recursiveTolerancePct.setText(SettingsFields.format(recTolPct));
+		updateApplyState();
+		toFront();
+	}
+
+	/**
+	 * Enables Apply only while the boxes hold valid numbers that differ from the stored
+	 * settings, and shows whether there are unapplied changes.
+	 */
+	void updateApplyState() {
+		boolean changed;
+		try {
+			double sigma  = Double.parseDouble(gaussianBlurSigma.getText().trim());
+			double thresh = Double.parseDouble(maximumFinderTolerance.getText().trim()) / 100.0;
+			changed = !SettingsFields.same(sigma, controller.getGaussianBlurSigma())
+					|| !SettingsFields.same(thresh, controller.getMaximumFinderTolerance())
+					|| checkBoxInvertIntensity.isSelected() != controller.getInvertIntensity();
+			if (isRecursive) {
+				double recTol = Double.parseDouble(recursiveTolerancePct.getText().trim());
+				changed |= !SettingsFields.same(recTol, controller.getRecursiveTolerancePct());
+			}
+		} catch (NumberFormatException e) {
+			buttonApply.setEnabled(false);
+			SettingsFields.showError(calibrationMessage, "All values must be numeric");
+			return;
+		}
+		buttonApply.setEnabled(changed);
+		if (changed) SettingsFields.showPending(calibrationMessage);
+		else SettingsFields.clear(calibrationMessage);
 	}
 
 	// ── View construction ─────────────────────────────────────────────────────
@@ -168,6 +210,9 @@ public class CalibrationPanel extends JFrame implements ActionListener {
 		checkBoxInvertIntensity.addActionListener(this);
 		guidedCalibrationButton.addActionListener(this);
 		buttonApply            .addActionListener(this);
+		SettingsFields.onEdit(this::updateApplyState,
+				gaussianBlurSigma, maximumFinderTolerance, recursiveTolerancePct);
+		updateApplyState();
 
 		add(panel);
 		pack();
@@ -187,30 +232,30 @@ public class CalibrationPanel extends JFrame implements ActionListener {
 				null, options, options[1]);
 			if (choice == 1) return;
 			controller.clearData(2); //TODO: enum
+			loadedData = false; // cleared; don't warn again on the next Apply
 		}
 
 		try {
-			controller.setGaussianBlurSigma(Double.parseDouble(gaussianBlurSigma.getText()));
+			controller.setGaussianBlurSigma(Double.parseDouble(gaussianBlurSigma.getText().trim()));
 			// Threshold entered as percent; store as fraction [0–1].
 			controller.setMaximumFinderTolerance(
-				Double.parseDouble(maximumFinderTolerance.getText()) / 100.0);
+				Double.parseDouble(maximumFinderTolerance.getText().trim()) / 100.0);
 			if (isRecursive) {
 				controller.setRecursiveTolerancePct(
-					Double.parseDouble(recursiveTolerancePct.getText()));
+					Double.parseDouble(recursiveTolerancePct.getText().trim()));
 			}
 			controller.setInvertIntensity(checkBoxInvertIntensity.isSelected());
-			calibrationMessage.setForeground(Color.BLACK);
-			calibrationMessage.setText("New values applied");
+			initialize(); // show the stored values, normalised
 		} catch (NumberFormatException e) {
-			calibrationMessage.setForeground(Color.RED);
-			calibrationMessage.setText("All values must be numeric");
+			// Apply is disabled while a value is invalid; kept as a safeguard.
 		}
+		updateApplyState();
 	}
 
 	// ── Guided calibration ────────────────────────────────────────────────────
 
 	public void runGuidedCalibration() {
-		GuidedCalibration calibrate = new GuidedCalibration(controller, isRecursive);
+		GuidedCalibration calibrate = new GuidedCalibration(controller, isRecursive, this);
 		calibrate.run();
 	}
 
@@ -220,9 +265,7 @@ public class CalibrationPanel extends JFrame implements ActionListener {
 	public void actionPerformed(ActionEvent e) {
 		if (e.getSource() == buttonApply)             setCalibration();
 		if (e.getSource() == guidedCalibrationButton) runGuidedCalibration();
-		if (e.getSource() == checkBoxInvertIntensity) {
-			controller.setInvertIntensity(checkBoxInvertIntensity.isSelected());
-			calibrationMessage.setText(" "); // clear any prior status message
-		}
+		// Invert Intensity is applied with the other values (Apply), not immediately.
+		if (e.getSource() == checkBoxInvertIntensity) updateApplyState();
 	}
 }

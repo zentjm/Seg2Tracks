@@ -174,7 +174,7 @@ This dialog sets the parameters used to detect object centres before SARN segmen
 | **Sigma** | Standard deviation of the Gaussian blur applied before peak detection. Larger values blur the image more, merging nearby intensity peaks. Set this to approximately the expected object radius ÷ √2. | 2 – 50 px |
 | **Threshold (%)** | Fraction of the frame's intensity range that a detected peak's kernel-averaged intensity must exceed. Increase to reject dim false detections; decrease to include dimmer true objects. | 5 – 40 % |
 | **Recursive Tolerance (%)** | *(Subsegmentation panels only)* Peak-separation tolerance as a percentage of the intensity range, used to distinguish adjacent sub-object peaks within a single parent object. | 5 – 20 % |
-| **Invert Intensity** | Check if objects appear as dark regions on a bright background (e.g., transmitted light or phase contrast). | — |
+| **Invert Intensity** | Check if objects appear as dark regions on a bright background (e.g., transmitted light or phase contrast). Takes effect when you press **Apply**, like the other values. | — |
 
 ### Auto-calibration
 
@@ -183,11 +183,11 @@ Click **Guided Calibration** to open the interactive preview window, which inclu
 - **Auto-calibrate** — estimates sigma automatically from the image using Laplacian-of-Gaussian (LoG) scale-space analysis. No existing segmentation required. Updates the Sigma slider only.
 - **Auto-calibrate from DataSet** — estimates both sigma and threshold from an already-loaded ground-truth segmentation. Enabled only when a DataSet with external segmentation data is loaded. Updates both sliders.
 
-After auto-calibration, review the result in the preview and click **Apply to Settings** to commit.
+After auto-calibration, review the result in the preview, click **Send to Settings**, then press **Apply** in the settings window.
 
 ### Applying settings
 
-Click **Apply** to commit values to the controller. If segmentation data is already loaded, you will be warned that changing settings will clear it.
+The boxes are the only way settings change. Edit them (or fill them from Guided Calibration with **Send to Settings**), then press **Apply**. Apply is available only while the boxes differ from the settings in use; a note under the buttons reads *Changes not applied yet* until you press it, or shows in red if a value is invalid. If segmentation data is already loaded, you will be warned that changing settings will clear it.
 
 ---
 
@@ -227,11 +227,11 @@ The **Decrease** and **Increase** buttons beside each slider step the parameter 
 - **Auto-calibrate** — estimates sigma via LoG scale-space (no DataSet needed). Updates the Sigma slider and refreshes the preview.
 - **Auto-calibrate from DataSet** — estimates sigma and threshold from a loaded ground-truth segmentation. Updates both sliders.
 
-After either method, review the result and click **Apply to Settings** to push values to the controller.
+After either method, review the result and click **Send to Settings** to copy the values into the settings window.
 
 ### Applying results
 
-Click **Apply to Settings** to push the current slider values back to the Object ID Settings. Click **Close** to discard and close the preview window.
+The settings window steps aside while Guided Calibration is open; the preview image opens beside the calibration controls. Click **Send to Settings** to copy the current slider values into the Object ID Settings boxes and return to that window, then press **Apply** there to use them. Nothing changes until you press Apply, which is the only way settings are changed. Click **Close** to return without sending anything.
 
 ---
 
@@ -255,7 +255,7 @@ Click **Guided Calibration** to open the interactive preview window. Its **Auto-
 
 ### Applying settings
 
-Click **Apply** to commit values to the controller.
+The boxes are the only way settings change. Edit them (or fill them from Guided Calibration with **Send to Settings**), then press **Apply**. Apply is available only while the boxes differ from the settings in use; a note under the buttons reads *Changes not applied yet* until you press it, or shows in red if a value is invalid.
 
 ---
 
@@ -283,11 +283,11 @@ The value label next to each slider updates continuously while dragging.
 
 ### Auto-calibration
 
-**Auto-calibrate from DataSet** estimates Search Distance % and Ceiling from the boundary sizes already present in your loaded dataset. Review the result in the preview, then click **Apply to Settings** to commit.
+**Auto-calibrate from DataSet** estimates Search Distance % and Ceiling from the boundary sizes already present in your loaded dataset. Review the result in the preview, then click **Send to Settings**.
 
 ### Applying results
 
-Click **Apply to Settings** to push the current slider values back to Boundary Cleanup Settings. Click **Close** to discard and close the preview window.
+The settings window steps aside while Guided Calibration is open; the preview image opens beside the calibration controls. Click **Send to Settings** to copy the current slider values into the Boundary Cleanup Settings boxes and return to that window, then press **Apply** there to use them. Click **Close** to return without sending anything.
 
 ---
 

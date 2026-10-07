@@ -28,6 +28,11 @@ guide, use the **User Manual** button.
 
 - Fixed **older datasets failing to load**. Save files created before v0.5.1 stopped opening in later versions (Load Data silently did nothing). They now load correctly again, and new save files continue to work — both old and new formats are read interchangeably.
 
+### Settings windows
+
+- **Guided Calibration now fills in the settings window instead of changing settings directly.** Its button is now **Send to Settings**: it copies the values into the Object Identification (or Boundary Cleanup) Settings boxes, and nothing changes until you press **Apply** there. This also means the warning about clearing loaded segmentations is always shown when it applies. While Guided Calibration is open, the settings window steps aside and the preview image opens next to the calibration controls instead of covering them.
+- **Apply is only available when there is something to apply**: it is greyed out until a value in the boxes differs from the setting in use. A note under the buttons says *Changes not applied yet*, or shows an error in red if a value is invalid. **Invert Intensity** now also takes effect when you press Apply.
+
 ### Segmentation accuracy
 
 - Fixed **Preview outlines appearing slightly shifted** toward the bottom-right of objects (a thin dark gap on the right and bottom edges). Only the on-screen preview was affected; measurements and exported overlays were already correct.

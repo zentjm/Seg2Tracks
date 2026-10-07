@@ -1,6 +1,5 @@
 package gui;
 
-import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
@@ -69,9 +68,54 @@ public class BoundaryCleanupPanel extends JFrame implements ActionListener {
 	/** Populates fields from the controller's current stored values. */
 	public void initialize() {
 		// Stored as fraction [0-1]; display as percent.
-		searchFraction.setText("" + (controller.getSearchFraction() * 100));
+		searchFraction.setText(SettingsFields.format(controller.getSearchFraction() * 100));
 		searchCeiling.setText("" + controller.getSearchCeiling());
-		epsilon.setText("" + controller.getSimplificationEpsilon());
+		epsilon.setText(SettingsFields.format(controller.getSimplificationEpsilon()));
+	}
+
+	/**
+	 * Receives values from Guided Calibration's "Send to Settings": fills the boxes only.
+	 * Nothing is stored until the user presses Apply here.
+	 *
+	 * @param fractionPct search distance, in percent
+	 * @param ceiling     search distance ceiling (points)
+	 * @param eps         simplification epsilon (px)
+	 */
+	public void receiveCalibration(double fractionPct, int ceiling, double eps) {
+		searchFraction.setText(SettingsFields.format(fractionPct));
+		searchCeiling.setText("" + ceiling);
+		epsilon.setText(SettingsFields.format(eps));
+		updateApplyState();
+		toFront();
+	}
+
+	/**
+	 * Enables Apply only while the boxes hold valid positive numbers that differ from the
+	 * stored settings, and shows whether there are unapplied changes.
+	 */
+	void updateApplyState() {
+		double fraction, eps;
+		int ceiling;
+		try {
+			fraction = Double.parseDouble(searchFraction.getText().trim()) / 100.0;
+			ceiling  = Integer.parseInt(searchCeiling.getText().trim());
+			eps      = Double.parseDouble(epsilon.getText().trim());
+		} catch (NumberFormatException e) {
+			buttonApply.setEnabled(false);
+			SettingsFields.showError(calibrationMessage, "All values must be numeric (ceiling a whole number)");
+			return;
+		}
+		if (fraction <= 0 || ceiling <= 0 || eps <= 0) {
+			buttonApply.setEnabled(false);
+			SettingsFields.showError(calibrationMessage, "All values must be positive");
+			return;
+		}
+		boolean changed = !SettingsFields.same(fraction, controller.getSearchFraction())
+				|| ceiling != controller.getSearchCeiling()
+				|| !SettingsFields.same(eps, controller.getSimplificationEpsilon());
+		buttonApply.setEnabled(changed);
+		if (changed) SettingsFields.showPending(calibrationMessage);
+		else SettingsFields.clear(calibrationMessage);
 	}
 
 	// ── View construction ─────────────────────────────────────────────────────
@@ -133,6 +177,8 @@ public class BoundaryCleanupPanel extends JFrame implements ActionListener {
 		// ── Wire listeners ────────────────────────────────────────────────────
 		guidedCalibrationButton.addActionListener(this);
 		buttonApply            .addActionListener(this);
+		SettingsFields.onEdit(this::updateApplyState, searchFraction, searchCeiling, epsilon);
+		updateApplyState();
 
 		add(panel);
 		pack();
@@ -146,31 +192,25 @@ public class BoundaryCleanupPanel extends JFrame implements ActionListener {
 	public void setCalibration() {
 		try {
 			// Percent entered; store as fraction [0-1].
-			double fraction = Double.parseDouble(searchFraction.getText()) / 100.0;
-			int ceiling = Integer.parseInt(searchCeiling.getText());
-			double eps = Double.parseDouble(epsilon.getText());
-
-			if (fraction <= 0 || ceiling <= 0 || eps <= 0) {
-				calibrationMessage.setForeground(Color.RED);
-				calibrationMessage.setText("All values must be positive");
-				return;
+			double fraction = Double.parseDouble(searchFraction.getText().trim()) / 100.0;
+			int ceiling = Integer.parseInt(searchCeiling.getText().trim());
+			double eps = Double.parseDouble(epsilon.getText().trim());
+			if (fraction > 0 && ceiling > 0 && eps > 0) {
+				controller.setSearchFraction(fraction);
+				controller.setSearchCeiling(ceiling);
+				controller.setSimplificationEpsilon(eps);
+				initialize(); // show the stored values, normalised
 			}
-
-			controller.setSearchFraction(fraction);
-			controller.setSearchCeiling(ceiling);
-			controller.setSimplificationEpsilon(eps);
-			calibrationMessage.setForeground(Color.BLACK);
-			calibrationMessage.setText("New values applied");
 		} catch (NumberFormatException e) {
-			calibrationMessage.setForeground(Color.RED);
-			calibrationMessage.setText("All values must be numeric");
+			// Apply is disabled while a value is invalid; kept as a safeguard.
 		}
+		updateApplyState();
 	}
 
 	// ── Guided calibration ────────────────────────────────────────────────────
 
 	public void runGuidedCalibration() {
-		BoundaryCleanupCalibration calibrate = new BoundaryCleanupCalibration(controller);
+		BoundaryCleanupCalibration calibrate = new BoundaryCleanupCalibration(controller, this);
 		calibrate.run();
 	}
 

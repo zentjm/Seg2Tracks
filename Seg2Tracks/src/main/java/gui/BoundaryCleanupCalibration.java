@@ -56,8 +56,9 @@ import ij.process.ImageProcessor;
  * fraction change showing little visible effect on the red/green overlay is expected in that case,
  * not a bug.
  *
- * <p>"Apply to Settings" pushes the current slider values back to the {@link OperationController},
- * exactly as clicking "Apply" in the parent {@link BoundaryCleanupPanel} would.
+ * <p>"Send to Settings" copies the current slider values into the parent
+ * {@link BoundaryCleanupPanel}'s text boxes; they are stored only when Apply is pressed there,
+ * so those boxes are the single path into the settings.
  */
 public class BoundaryCleanupCalibration extends JFrame implements ChangeListener, ActionListener {
 
@@ -102,10 +103,14 @@ public class BoundaryCleanupCalibration extends JFrame implements ChangeListener
 
 	// ── Constructor ───────────────────────────────────────────────────────────
 
-	public BoundaryCleanupCalibration(OperationController controller) {
+	public BoundaryCleanupCalibration(OperationController controller, BoundaryCleanupPanel settingsPanel) {
 		super("Guided Calibration — Boundary Cleanup");
-		this.controller = controller;
+		this.controller    = controller;
+		this.settingsPanel = settingsPanel;
 	}
+
+	/** The settings dialog that receives "Send to Settings"; its Apply stores the values. */
+	private final BoundaryCleanupPanel settingsPanel;
 
 	// ── Entry point ───────────────────────────────────────────────────────────
 
@@ -230,7 +235,7 @@ public class BoundaryCleanupCalibration extends JFrame implements ChangeListener
 
 		statusLabel = new JLabel(" ");
 		statusLabel.setFont(statusLabel.getFont().deriveFont(Font.ITALIC));
-		buttonApply = new JButton("Apply to Settings");
+		buttonApply = new JButton("Send to Settings");
 		buttonClose = new JButton("Close");
 		buttonApply.addActionListener(this);
 		buttonClose.addActionListener(this);
@@ -262,8 +267,10 @@ public class BoundaryCleanupCalibration extends JFrame implements ChangeListener
 		setContentPane(panel);
 		pack();
 		setMinimumSize(new Dimension(500, getHeight()));
-		setLocationRelativeTo(null);
+		CalibrationWindows.placeControls(this);
 		setVisible(true);
+		// The settings window steps aside while calibrating; dispose() brings it back.
+		settingsPanel.setVisible(false);
 	}
 
 	private static void addSliderRow(JPanel panel, GridBagConstraints c, int row,
@@ -308,6 +315,7 @@ public class BoundaryCleanupCalibration extends JFrame implements ChangeListener
 		if (previewPlus == null || !previewPlus.isVisible()) {
 			previewPlus = new ImagePlus(title, display.duplicate());
 			previewPlus.show();
+			CalibrationWindows.arrange(this, previewPlus); // beside the controls, controls in front
 		} else {
 			previewPlus.setTitle(title);
 			previewPlus.setProcessor(display.duplicate());
@@ -373,11 +381,16 @@ public class BoundaryCleanupCalibration extends JFrame implements ChangeListener
 
 	// ── Apply / close ─────────────────────────────────────────────────────────
 
+	/**
+	 * Sends the current slider values to the settings dialog's text boxes. Nothing is stored
+	 * here: the dialog's Apply button is the single path into the settings.
+	 */
 	private void applyToSettings() {
-		controller.setSearchFraction(sliderSearchFraction.getValue() / (double) (SEARCH_FRACTION_SCALE * 100));
-		controller.setSearchCeiling(sliderSearchCeiling.getValue());
-		controller.setSimplificationEpsilon(sliderEpsilon.getValue() / (double) EPSILON_SCALE);
-		statusLabel.setText("Settings applied.");
+		settingsPanel.receiveCalibration(
+				sliderSearchFraction.getValue() / (double) SEARCH_FRACTION_SCALE,
+				sliderSearchCeiling.getValue(),
+				sliderEpsilon.getValue() / (double) EPSILON_SCALE);
+		close(); // back to the settings window, where Apply stores the values
 	}
 
 	// ── Auto-calibration ──────────────────────────────────────────────────────
@@ -427,7 +440,7 @@ public class BoundaryCleanupCalibration extends JFrame implements ChangeListener
 					updateValueLabels();
 					refreshPreview();
 					statusLabel.setText(String.format(
-							"Calibrated: search=%.1f%%, ceiling=%d px — click \"Apply to Settings\" to commit.",
+							"Calibrated: search=%.1f%%, ceiling=%d px — click \"Send to Settings\", then Apply.",
 							fraction * 100, ceiling));
 				} catch (InterruptedException | ExecutionException ex) {
 					Throwable cause = ex.getCause();
@@ -453,10 +466,13 @@ public class BoundaryCleanupCalibration extends JFrame implements ChangeListener
 		dispose();
 	}
 
+	/** Closes the preview too, and brings the settings window back. */
 	@Override
 	public void dispose() {
 		if (previewPlus != null && previewPlus.isVisible()) previewPlus.close();
 		super.dispose();
+		settingsPanel.setVisible(true);
+		settingsPanel.toFront();
 	}
 
 	// ── Utilities ─────────────────────────────────────────────────────────────

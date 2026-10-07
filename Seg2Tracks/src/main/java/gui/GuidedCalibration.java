@@ -54,9 +54,9 @@ import ij.process.ImageProcessor;
  * <p>Only the currently selected frame is processed (not the full stack), keeping
  * response times fast.  The frame can be changed via its own slider.
  *
- * <p>"Apply to Settings" pushes the current slider values back to the
- * {@link OperationController}, exactly as clicking "Apply" in the parent
- * {@link CalibrationPanel} would.
+ * <p>"Send to Settings" copies the current slider values into the parent
+ * {@link CalibrationPanel}'s text boxes; they are stored only when Apply is pressed there, so
+ * those boxes are the single path into the settings.
  *
  * <h3>Detection pipeline (per refresh)</h3>
  * <ol>
@@ -167,12 +167,17 @@ public class GuidedCalibration extends JFrame implements ChangeListener, ActionL
 	 * @param isRecursive true when opened from a recursive (subsegmentation) panel;
 	 *                    shows the Recursive Tolerance slider and uses it for detection
 	 */
-	public GuidedCalibration(OperationController controller, boolean isRecursive) {
+	public GuidedCalibration(OperationController controller, boolean isRecursive,
+	                         CalibrationPanel settingsPanel) {
 		super(isRecursive ? "Guided Calibration — Subsegment Identification"
 		                  : "Guided Calibration — Object Identification");
-		this.controller  = controller;
-		this.isRecursive = isRecursive;
+		this.controller    = controller;
+		this.isRecursive   = isRecursive;
+		this.settingsPanel = settingsPanel;
 	}
+
+	/** The settings dialog that receives "Send to Settings"; its Apply stores the values. */
+	private final CalibrationPanel settingsPanel;
 
 	// ── Entry point ───────────────────────────────────────────────────────────
 
@@ -290,7 +295,7 @@ public class GuidedCalibration extends JFrame implements ChangeListener, ActionL
 		// Status & buttons
 		statusLabel = new JLabel(" ");
 		statusLabel.setFont(statusLabel.getFont().deriveFont(Font.ITALIC));
-		buttonApply = new JButton("Apply to Settings");
+		buttonApply = new JButton("Send to Settings");
 		buttonClose = new JButton("Close");
 		buttonApply.addActionListener(this);
 		buttonClose.addActionListener(this);
@@ -379,8 +384,10 @@ public class GuidedCalibration extends JFrame implements ChangeListener, ActionL
 		setContentPane(panel);
 		pack();
 		setMinimumSize(new Dimension(500, getHeight()));
-		setLocationRelativeTo(null);
+		CalibrationWindows.placeControls(this);
 		setVisible(true);
+		// The settings window steps aside while calibrating; dispose() brings it back.
+		settingsPanel.setVisible(false);
 	}
 
 	/** Adds a label | slider | value-label | [extra] row using GridBagLayout. */
@@ -461,6 +468,7 @@ public class GuidedCalibration extends JFrame implements ChangeListener, ActionL
 		if (previewPlus == null || !previewPlus.isVisible()) {
 			previewPlus = new ImagePlus(title, display.duplicate());
 			previewPlus.show();
+			CalibrationWindows.arrange(this, previewPlus); // beside the controls, controls in front
 		} else {
 			previewPlus.setTitle(title);
 			previewPlus.setProcessor(display.duplicate());
@@ -817,18 +825,17 @@ public class GuidedCalibration extends JFrame implements ChangeListener, ActionL
 	// ── Apply / close ─────────────────────────────────────────────────────────
 
 	/**
-	 * Pushes the current slider values to the controller.
-	 * Sigma is converted from slider units ({@code val / SIGMA_SCALE}).
-	 * Threshold is converted from percent to fraction ({@code val / 100.0}).
-	 * Recursive Tolerance is stored as percent directly.
+	 * Sends the current slider values to the settings dialog's text boxes. Nothing is stored
+	 * here: the dialog's Apply button is the single path into the settings.
+	 * Sigma is converted from slider units ({@code val / SIGMA_SCALE}); threshold and
+	 * recursive tolerance are sent in percent, as the boxes display them.
 	 */
 	private void applyToSettings() {
-		controller.setGaussianBlurSigma(sliderSigma.getValue() / (double) SIGMA_SCALE);
-		controller.setMaximumFinderTolerance(sliderThreshold.getValue() / 100.0);
-		if (isRecursive) {
-			controller.setRecursiveTolerancePct(sliderRecTol.getValue());
-		}
-		statusLabel.setText("Settings applied.");
+		settingsPanel.receiveCalibration(
+				sliderSigma.getValue() / (double) SIGMA_SCALE,
+				sliderThreshold.getValue(),
+				isRecursive ? sliderRecTol.getValue() : controller.getRecursiveTolerancePct());
+		close(); // back to the settings window, where Apply stores the values
 	}
 
 	// ── Auto-calibration ─────────────────────────────────────────────────────
@@ -860,7 +867,7 @@ public class GuidedCalibration extends JFrame implements ChangeListener, ActionL
 					updateValueLabels();
 					refreshPreview();
 					statusLabel.setText(String.format(
-							"Sigma estimated: %.2f px  — click \"Apply to Settings\" to commit.", sigma));
+							"Sigma estimated: %.2f px  — click \"Send to Settings\", then Apply.", sigma));
 				} catch (InterruptedException | ExecutionException ex) {
 					Throwable cause = ex.getCause();
 					statusLabel.setText("Auto-calibration failed: "
@@ -918,7 +925,7 @@ public class GuidedCalibration extends JFrame implements ChangeListener, ActionL
 					updateValueLabels();
 					refreshPreview();
 					statusLabel.setText(String.format(
-							"Calibrated: σ=%.2f px, threshold=%.1f%%  — click \"Apply to Settings\" to commit.",
+							"Calibrated: σ=%.2f px, threshold=%.1f%%  — click \"Send to Settings\", then Apply.",
 							sigma, threshold * 100.0));
 				} catch (InterruptedException | ExecutionException ex) {
 					Throwable cause = ex.getCause();
@@ -935,10 +942,13 @@ public class GuidedCalibration extends JFrame implements ChangeListener, ActionL
 		dispose();
 	}
 
+	/** Closes the preview too, and brings the settings window back. */
 	@Override
 	public void dispose() {
 		if (previewPlus != null && previewPlus.isVisible()) previewPlus.close();
 		super.dispose();
+		settingsPanel.setVisible(true);
+		settingsPanel.toFront();
 	}
 
 	// ── Utilities ─────────────────────────────────────────────────────────────
