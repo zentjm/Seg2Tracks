@@ -1,6 +1,6 @@
 # Seg2Tracks Change Log
 
-**Version 0.5.4** | *Publication pending*
+**Version 0.5.4** | *Released 2026-10-06*
 
 A running log of what changed in each version, newest first. For the full user
 guide, use the **User Manual** button.
@@ -58,8 +58,8 @@ guide, use the **User Manual** button.
 
 - Fixed **merging two objects in an internal segmentation** being recorded as external segmentation data; a merge is now committed to whichever channel was actually being edited.
 - Fixed a **stale selection reappearing** after stepping back past the first sub-segment in the Recursive Manual window.
-- Fixed **subsegmentation (void) boundary cleanup being skipped almost entirely**. A size threshold meant to skip trivial small perimeters unintentionally excluded nearly all subsegmentation results too, leaving stray boundary artifacts uncorrected on smaller objects while larger ones were cleaned normally. Boundaries are now cleaned consistently regardless of object size.
-- Improved **boundary simplification** for every generated segmentation boundary (SARN, MRC, and internal segmentation). Straight edges are now simplified down to just their endpoints, while corners and genuine curved detail are preserved — previously, straight edges kept every single pixel as a boundary point. The cleanup pass also now scales with object size instead of using one fixed setting for every object, and is tunable per dataset via the new Boundary Cleanup Settings.
+- Fixed **subsegmentation (void) SARN boundary cleanup being skipped almost entirely**. A size threshold meant to skip trivial small perimeters unintentionally excluded nearly all subsegmentation results too, leaving stray boundary artifacts uncorrected on smaller objects while larger ones were cleaned normally. Boundaries are now cleaned consistently regardless of object size.
+- Improved **boundary simplification** for SARN boundaries (all SARN methods, including MRC). Straight edges are now simplified down to just their endpoints, while corners and genuine curved detail are preserved — previously, straight edges kept every single pixel as a boundary point. The cleanup pass also now scales with object size instead of using one fixed setting for every object, and is tunable per dataset via the new Boundary Cleanup Settings.
 
 ### Analysis accuracy
 

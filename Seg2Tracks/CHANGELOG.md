@@ -7,7 +7,7 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
 
 ---
 
-## [0.5.4] — 2026-07-06
+## [0.5.4] — 2026-10-06
 
 ### Added
 

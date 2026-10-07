@@ -1,6 +1,6 @@
 # Seg2Tracks User Manual
 
-**Version 0.5.4** | *Publication pending*
+**Version 0.5.4** | *Released 2026-10-06*
 
 ---
 
@@ -422,15 +422,23 @@ The Manual Segmentation editor allows you to correct the automated external segm
 ### Drawing a new object
 
 1. Click **Segmentation** to enter drawing mode.
-2. Use **Start Object** to begin drawing the outline for the current frame. The active draw tool (Polygon or Freehand) is set in **Settings**.
+2. Use **Start Object** to begin drawing the outline for the current frame, with the draw tool chosen in **Settings** (see *Draw tools* below). While an object is being drawn the image stays on the current frame; it cannot be scrolled away by accident.
 3. Draw the outline around the object, then click **End Object** to commit it.
-4. Use **Next Frame** / **Previous Frame** to advance through frames, drawing the outline for each. The object is tracked across the frames you draw it in.
-5. When finished, return to the **Main Menu**.
+4. Use **Next Frame** / **Previous Frame** to advance through frames, drawing the outline for each. The outline from the previous frame is carried over, so you can adjust it by dragging its points instead of drawing it again. The object is tracked across the frames you draw it in.
+5. When finished, return to the **Main Menu**. To abandon an object you have started, click **Cancel Object**.
+
+#### Draw tools
+
+- **Polygon** — click to place each point; double-click (or click the first point) to close the outline.
+- **Freehand** — click once to start, then move the mouse (no need to hold the button); the line follows the cursor. Click again to finish, or bring the cursor back to the starting point and the outline closes by itself. Press **Esc** to discard a trace in progress. Clicking away from a finished outline starts a new trace.
+
+Finished outlines from either tool can be adjusted: drag a point to move it, **shift-click** the edge to add a point, **alt-click** a point to remove it, or drag inside the outline to move it.
 
 | Button | Action |
 |---|---|
 | **Start Object** | Begin a new ROI for the current frame using the configured draw tool. |
 | **End Object** | Commit the current outline and advance. |
+| **Cancel Object** | Discard the object being drawn (asks first if frames have already been drawn). |
 | **Next Frame** | Advance to the next frame (commits the current outline). |
 | **Previous Frame** | Go back one frame. |
 | **Restore Selection** | Restore the ROI from the previous frame as a starting point. |
@@ -445,7 +453,7 @@ Click **Modify Objects** to enter modification mode. Click any object outline to
 |---|---|
 | **Delete** | Delete the selected object from this and all frames in its track. |
 | **Merge** | Merge two selected objects into a single combined outline. |
-| **Redraw Segment** | Correct a single frame's outline without deleting the whole track. Select the object, navigate to the frame that needs correcting, click **Redraw Segment**, draw the new outline, then **Apply Redraw** (or **Cancel Redraw** to discard). Every other frame in the track is untouched. |
+| **Redraw Segment** | Correct a single frame's outline without deleting the whole track. Select the object, navigate to the frame that needs correcting, click **Redraw Segment**, draw the new outline, then **Apply Redraw**. While redrawing, the old outline is shown as a dashed line that cannot be edited, and the image stays on that frame. **Cancel Redraw** keeps the old outline. Every other frame in the track is untouched. |
 | **Split** | Draw a bisecting line across the selected object to split it into two tracks. |
 | **Link** | Merge two selected tracks into one (blocked if frames overlap). |
 | **Unlink** | Split the selected track at the current frame boundary into two separate tracks. |
@@ -473,14 +481,15 @@ Click **Settings** from the main menu or the segmentation sub-panel to open the 
 | Setting | Description |
 |---|---|
 | **ROI Color…** | Opens a colour picker. The chosen colour is applied to all non-selected overlay outlines and to the active draw-tool cursor immediately. Saved across sessions. |
-| **Draw Tool** *(segmentation sub-panel only)* | Toggle between **Tool: Polygon** and **Tool: Freehand**. The selection is applied on the next **Start Object** and saved across sessions. |
+| **Draw Tool** *(segmentation sub-panel only)* | Toggle between **Tool: Polygon** and **Tool: Freehand** (see *Draw tools* above). Takes effect immediately, even while drawing, and is saved across sessions. |
 
 Click **Back** to return to the previous panel.
 
 ### Tips
 
 - Use the ImageJ hand tool to pan the image while in the editor.
-- Change the draw tool in **Settings** before clicking **Start Object** if you prefer freehand drawing.
+- The draw tool can be switched in **Settings** at any time, including in the middle of an object.
+- To follow an object across frames quickly, draw it once, then on each **Next Frame** drag the carried-over outline's points into place.
 - If object outlines are hard to see against your image, open **Settings → ROI Color…** and pick a contrasting colour.
 
 ---
@@ -506,10 +515,10 @@ The Recursive Manual Segmentation editor shows each parent object in its own cro
 ### Drawing sub-objects
 
 1. Click **Segmentation** in the control panel.
-2. Use **Start Object** to begin drawing the sub-object outline for the current frame.
-3. Draw the polygon around the sub-object region, then click **End Object**.
-4. Use **Next Frame** / **Previous Frame** to draw the sub-object across consecutive frames.
-5. Click **Main Menu** when done with this sub-object.
+2. Use **Start Object** to begin drawing the sub-object outline for the current frame. The image stays on the current frame while you draw.
+3. Draw the outline around the sub-object region with the Polygon or Freehand tool (same tools as in Manual Segmentation), then click **End Object**.
+4. Use **Next Frame** / **Previous Frame** to draw the sub-object across consecutive frames; the previous outline is carried over and can be adjusted by dragging its points.
+5. Click **Main Menu** when done with this sub-object. To abandon a sub-object you have started, click **Cancel Object**.
 
 ### Modifying sub-objects
 
@@ -519,7 +528,7 @@ Click **Modify** to access:
 |---|---|
 | **Delete Object** | Remove the selected sub-object across all its frames. |
 | **Merge Objects** | Combine two sub-objects into one. |
-| **Redraw Segment** | Correct a single frame's outline without deleting the whole sub-object. Select the sub-object, navigate to the frame that needs correcting, click **Redraw Segment**, draw the new outline, then **Apply Redraw** (or **Cancel Redraw** to discard). Every other frame is untouched. |
+| **Redraw Segment** | Correct a single frame's outline without deleting the whole sub-object. Select the sub-object, navigate to the frame that needs correcting, click **Redraw Segment**, draw the new outline, then **Apply Redraw**. While redrawing, the old outline is shown as a dashed line that cannot be edited, and the image stays on that frame. **Cancel Redraw** keeps the old outline. Every other frame is untouched. |
 
 ### Settings (Recursive Manual Segmentation)
 
@@ -528,7 +537,7 @@ Click **Settings** from either the main menu or the segmentation sub-panel.
 | Setting | Description |
 |---|---|
 | **ROI Color…** | Opens a colour picker for overlay outlines and the draw-tool cursor. Saved across sessions and shared with the Manual Segmentation window. |
-| **Draw Tool** *(segmentation sub-panel only)* | Toggle between Polygon and Freehand tools. Saved across sessions. |
+| **Draw Tool** *(segmentation sub-panel only)* | Toggle between Polygon and Freehand tools (see *Draw tools* in Manual Segmentation). Takes effect immediately and is saved across sessions. |
 
 Click **Back** to return.
 
