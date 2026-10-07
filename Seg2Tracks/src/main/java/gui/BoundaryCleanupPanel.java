@@ -17,8 +17,9 @@ import javax.swing.JTextField;
 import util.Tooltips;
 
 /**
- * Dialog window for configuring boundary-cleanup parameters shared by every SARN and
- * internal-segmentation boundary-generation pipeline: how far {@code removeLoops} searches for
+ * Dialog window for configuring the SARN (external) boundary-cleanup parameters (internal
+ * segmentation keeps its traced outline uncleaned; see {@code Segmentation.tracedPerimeter}):
+ * how far {@code removeLoops} searches for
  * loop/revisit artifacts (scaled by a boundary's own point count, capped by an absolute
  * ceiling), and the {@code douglasPeucker} shape-fidelity tolerance.
  *

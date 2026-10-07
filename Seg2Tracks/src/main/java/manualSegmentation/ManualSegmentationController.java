@@ -237,7 +237,10 @@ public class ManualSegmentationController {
 			xPoints[i] = pointList[i].x;
 			yPoints[i] = pointList[i].y;
 		}
-		return new PolygonRoi(xPoints, yPoints, Roi.POLYLINE);
+		// POLYGON, not POLYLINE: perimeters are pixel-corner coordinates (wand traces). ImageJ draws
+		// line-type ROIs with vertices at pixel centres, which shifted the whole outline half a
+		// pixel toward +x/+y in the preview (and left the last edge open).
+		return new PolygonRoi(xPoints, yPoints, Roi.POLYGON);
 	}
 	
 	/** True while the segmentation sub-panel is showing; used by openSettings() to provide context. */

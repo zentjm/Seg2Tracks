@@ -45,9 +45,8 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
   Ceiling, Simplification Epsilon) for manual entry or, via its own **Guided Calibration**
   live-preview tool, interactive slider tuning against a real object from the loaded dataset
   (before/after boundary overlay) with an **Auto-calibrate from DataSet** starting-point estimate.
-  Mirrors the existing Object ID Settings / Guided Calibration workflow. Note the parameters affect
-  internal-segmentation boundary generation too, not just SARN — the Settings dialog it's nested
-  under is organizationally about the SARN Preprocessing row, but the scope is broader.
+  Mirrors the existing Object ID Settings / Guided Calibration workflow. The parameters apply to
+  SARN boundaries only (internal segmentation keeps its traced outline; see Fixed below).
   Persists per-panel via the same `Preferences` mechanism as every other segmentation setting.
 
 ### Changed
@@ -84,6 +83,19 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
 
 ### Fixed
 
+- **Preview outlines drawn half a pixel off toward +x/+y** — `ManualSegmentationController
+  .getPolygonRoi()` (used by Preview and Manual Segmentation) built `Roi.POLYLINE` ROIs from
+  pixel-corner perimeters; ImageJ draws line-type vertices at pixel centres, so the outline showed a
+  dark gap on the right/bottom of objects and cut in on the left/top, and the last edge was open.
+  Now `Roi.POLYGON`, matching the analysis overlay and the recursive editor. Display only; stored
+  perimeters and measurements were unaffected.
+- **Internal segmentation boundaries shrunk by the new boundary cleanup** — the `removeLoops` +
+  Douglas-Peucker pipeline was also applied to wand-traced internal boundaries (global and
+  restricted methods), which are already simple loop-free polygons. On Phantom28 with Restricted
+  Li this shrank every object (~3% area, mean IoU 0.963 vs the traced outline) and cut one small
+  object to half its area; the old `shortcutPerimeter` left outlines under 200 points untouched
+  (IoU 1.000). Internal segmentation now keeps the traced outline (`Segmentation.tracedPerimeter`);
+  Boundary Cleanup applies to SARN boundaries only.
 - **Cancel Redraw removed the outline from the display** — ImageJ's `Roi.equals()` treated the
   reference copy as equal to the original, so the original was never put back. Overlay operations
   in `RedrawReference` and the Apply path now match by object identity.

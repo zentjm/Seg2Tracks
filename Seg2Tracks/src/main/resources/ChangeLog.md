@@ -28,6 +28,11 @@ guide, use the **User Manual** button.
 
 - Fixed **older datasets failing to load**. Save files created before v0.5.1 stopped opening in later versions (Load Data silently did nothing). They now load correctly again, and new save files continue to work — both old and new formats are read interchangeably.
 
+### Segmentation accuracy
+
+- Fixed **Preview outlines appearing slightly shifted** toward the bottom-right of objects (a thin dark gap on the right and bottom edges). Only the on-screen preview was affected; measurements and exported overlays were already correct.
+- Fixed **internal segmentation boundaries sitting slightly inside the true edge** (and small objects occasionally being cut badly), most noticeable with the Restricted methods such as Restricted Li. Internal segmentation now keeps the exact traced boundary again; **Boundary Cleanup Settings** now apply to SARN boundaries only.
+
 ### Analysis and export
 
 - Fixed **analysis failing with no export and no message**. If an analysis hits an error, Seg2Tracks now shows an "Analysis failed" dialog explaining the cause instead of silently producing nothing.

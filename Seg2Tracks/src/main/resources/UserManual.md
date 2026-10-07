@@ -239,7 +239,7 @@ Click **Apply to Settings** to push the current slider values back to the Object
 
 **Accessed via:** SARN Preprocessing row (row 2) › **Settings** › **Boundary Cleanup Settings**
 
-This dialog sets the parameters used to clean up and simplify every generated segmentation boundary (SARN, MRC, and internal segmentation). These parameters affect boundary quality and point count, not object detection — set Object ID Settings first.
+This dialog sets the parameters used to clean up and simplify SARN boundaries (all SARN methods, including MRC). Internal segmentation boundaries are not affected: they keep the exact outline traced from the threshold. These parameters affect boundary quality and point count, not object detection — set Object ID Settings first.
 
 ### Parameters
 

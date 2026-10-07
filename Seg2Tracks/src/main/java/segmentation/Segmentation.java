@@ -94,9 +94,25 @@ public abstract class Segmentation {
 	}
 
 	/**
-	 * Configures boundary-cleanup parameters used by {@code extractInternalPerimeter}. See
-	 * {@link sarn.Sarn#setCleanupParams} for the full rationale — identical parameters, applied
-	 * to the internal-perimeter pipeline instead of the external (SARN) one.
+	 * The internal perimeter for a wand-traced boundary: the traced outline, densified to
+	 * pixel-connected points, with <b>no</b> loop removal or Douglas-Peucker simplification.
+	 * <p>
+	 * A wand trace of a thresholded region is already a simple, loop-free polygon, so the
+	 * Boundary Cleanup pipeline (built for SARN envelopes) has nothing to fix here and only
+	 * does harm: Douglas-Peucker chords always fall inside a convex outline, shrinking every
+	 * object (~3% area on Phantom28), and small objects can be cut badly (one 24 px object
+	 * lost half its area). Measured 2026-09-24; before v0.5.4 small outlines skipped cleanup
+	 * entirely (the old {@code shortcutPerimeter} returned any outline under 200 points
+	 * unchanged), which is why Restricted Li looked "basically perfect" then.
+	 */
+	static Point[] tracedPerimeter(Point[] points) {
+		return GeometricCalculations.straightPerimeter(points);
+	}
+
+	/**
+	 * Stores the Boundary Cleanup parameters. Kept for API symmetry with
+	 * {@link sarn.Sarn#setCleanupParams}, but internal segmentation deliberately no longer uses
+	 * them — see {@link #tracedPerimeter}.
 	 * @param searchFraction fraction of a contour's own point count used as removeLoops's
 	 *                        search-ahead window
 	 * @param searchCeiling  upper bound (in points) on the search window
@@ -215,18 +231,7 @@ public abstract class Segmentation {
 			Point[] points = new Point[wand.npoints];
 			for (int i = 0; i < wand.npoints; i++) points[i] = new Point(wand.xpoints[i], wand.ypoints[i]);
 
-			// Smooth perimeter: straighten → remove loops → simplify (Douglas-Peucker) → straighten again
-			Point[] densifiedInternal = GeometricCalculations.straightPerimeter(points);
-			int internalSearchDistance = GeometricCalculations.scaledSearchDistance(
-					densifiedInternal.length, searchFraction, searchCeiling);
-			segments.get(n).setInternalPerimeter(
-				GeometricCalculations.straightPerimeter(
-				GeometricCalculations.douglasPeucker(
-				GeometricCalculations.removeLoops(
-				densifiedInternal, internalSearchDistance,
-				GeometricCalculations.LOOP_REMOVAL_RANGE,
-				GeometricCalculations.LOOP_REMOVAL_SMOOTHING),
-				epsilon)));
+			segments.get(n).setInternalPerimeter(tracedPerimeter(points));
 			clean(segments.get(n)); // Flag any boundary-contact segments
 		}
 	}
@@ -286,18 +291,7 @@ public abstract class Segmentation {
 
 			//System.out.println("Segment frame count: " + segments.size() + "  Current segment: " + n);
 
-			// Smooth perimeter: straighten → remove loops → simplify (Douglas-Peucker) → straighten again
-			Point[] densifiedInternal = GeometricCalculations.straightPerimeter(points);
-			int internalSearchDistance = GeometricCalculations.scaledSearchDistance(
-					densifiedInternal.length, searchFraction, searchCeiling);
-			segments.get(n).setInternalPerimeter(
-				GeometricCalculations.straightPerimeter(
-				GeometricCalculations.douglasPeucker(
-				GeometricCalculations.removeLoops(
-				densifiedInternal, internalSearchDistance,
-				GeometricCalculations.LOOP_REMOVAL_RANGE,
-				GeometricCalculations.LOOP_REMOVAL_SMOOTHING),
-				epsilon)));
+			segments.get(n).setInternalPerimeter(tracedPerimeter(points));
 			clean(segments.get(n)); // Flag any boundary-contact segments
 		}
 	}

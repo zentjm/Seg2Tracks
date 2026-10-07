@@ -282,10 +282,17 @@ data-changing event. `refreshSubsegmentationOnAllPanels()` is always called from
   This made Cancel Redraw drop the outline from the display (fixed 2026-09-24 via
   `RedrawReference.indexOfExact()/removeExact()`). Delete/merge in both manual controllers still use
   `overlay.remove(seg.getRoi())`; only a risk if two outlines share identical bounds and length.
-- **Segmentation Comparer Settings likely NPEs** — `CompareMethod.getCalculations()` returns
+- **Segmentation Comparer Settings would NPE** — `CompareMethod.getCalculations()` returns
   `null` (TODO stub), and `AnalysisController.openAnalysisSettings()` passes that straight to
-  `AnalysisSettings`, which does `for (Data data : dataList)`. Opening Settings with
-  SegmentationComparer/SegmentationComparer2 selected should throw. (Found by reading the code, not run.)
+  `AnalysisSettings`, which does `for (Data data : dataList)`. Currently unreachable: the analysis
+  Settings button is disabled for every method (`AnalysisPanel`, "Implementation pending soon";
+  confirmed in Fiji 2026-09-24). Guard against a null list when enabling that button.
+- **Perimeters are pixel-corner coordinates — always build their ROIs as `Roi.POLYGON`.** ImageJ
+  draws line-type ROIs (POLYLINE/FREELINE) with vertices at pixel centres, which shifts a corner-
+  coordinate outline half a pixel toward +x/+y (the Preview did this until 2026-10-06).
+- **Progress bar is not reset between actions** — after a run it keeps showing e.g. "Operation
+  Complete" until the user switches Segmentation/Analysis menus (only `FloorPanel` resets it).
+  User asked (2026-09-24) for it to reset when the next action starts. Not yet done.
 - **`ModifiedHungarian.linkAssist()` Javadoc is stale** — says it returns null / is non-functional,
   but it now returns the matrix or throws. Class-level note still calls the implementation incomplete.
 
@@ -433,8 +440,8 @@ missing from config, commented-out binary segmentation. Still open, all low impa
   is now user-tunable per dataset: **Boundary Cleanup Settings** button, nested inside the SARN
   Preprocessing row's own **Settings** dialog (`gui/ExternalSegmentationSettings.java` — moved here
   from a standalone `OperationPanel.java` button per user request, since it's a sub-setting of SARN
-  Preprocessing, not a peer-level row button; note the parameters affect internal-segmentation
-  boundary generation too, not just SARN, despite living under the SARN-labeled dialog) opens
+  Preprocessing, not a peer-level row button; since 2026-09-24 the parameters affect SARN boundaries
+  only; internal segmentation keeps its traced outline, see `Segmentation.tracedPerimeter()`) opens
   `gui/BoundaryCleanupPanel.java` (manual entry, mirrors `CalibrationPanel.java`) →
   **Guided Calibration** opens `gui/BoundaryCleanupCalibration.java`
   (live-preview sliders for Search Distance %, Search Distance Ceiling, and Simplification Epsilon,
