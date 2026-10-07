@@ -93,8 +93,9 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
   Log4j API method that 2.14.1 lacks, so the WebDAV uploader failed with "Cannot create plugin:
   net.imagej.plugins.uploaders.webdav.WebDAVUploader" (`NoSuchMethodError:
   LoggerContextFactory.isClassLoaderDependent()`). Removed the dependency and the unused log4j 1.x
-  `log4j.properties`. (2.14.1 is also the Log4Shell-affected version; it was never published on
-  the Seg2Tracks update site.)
+  `log4j.properties`, and excluded the transitive `log4j:log4j` 1.2.17 (via `imagej-common`),
+  which duplicated Fiji's own `reload4j`. (2.14.1 is also the Log4Shell-affected version; none of
+  these were ever published on the Seg2Tracks update site.)
 - **Progress bar left stale, unnamed, or frozen** — the single shared progress bar kept the last
   result ("Operation Complete") until the user switched menus, did not say which panel it referred
   to, never showed completion for recursive segmentation, and froze mid-run when a segmentation

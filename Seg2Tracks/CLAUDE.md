@@ -285,7 +285,9 @@ data-changing event. `refreshSubsegmentationOnAllPanels()` is always called from
   (Fiji opens its Console) and the dialog says so. Added 2026-10-06 at the user's request.
 - **Never add Log4j (or other logging backends) to `pom.xml`.** `mvn install` copies every
   runtime dependency into `Fiji/jars`; an old `log4j-api` there broke Fiji's WebDAV uploader
-  (`commons-logging` 1.3.x calls newer Log4j API). Seg2Tracks logs nothing via Log4j. If Fiji
+  (`commons-logging` 1.3.x calls newer Log4j API). `log4j:log4j` 1.x is excluded from
+  `imagej-common` for the same reason (Fiji ships `reload4j`). Seg2Tracks logs nothing via Log4j.
+  After changing dependencies, check `mvn install`'s "Copying ... to Fiji/jars" lines. If Fiji
   reports "Cannot create plugin: ...WebDAVUploader", look for stray `log4j-*.jar` in `Fiji/jars`.
 - **Tab encoding** — some source files use hard tabs. The Edit tool may fail to match indented
   code. Use `sed -i` for single-line substitutions in those files.
