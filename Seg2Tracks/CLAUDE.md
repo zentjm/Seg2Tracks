@@ -283,12 +283,14 @@ data-changing event. `refreshSubsegmentationOnAllPanels()` is always called from
   Failed segmentation runs go through `OperationController.reportOperationFailure()`: a
   `util.UserInputException` gets a plain dialog and no stack trace; anything else prints its trace
   (Fiji opens its Console) and the dialog says so. Added 2026-10-06 at the user's request.
-- **Never add Log4j (or other logging backends) to `pom.xml`.** `mvn install` copies every
-  runtime dependency into `Fiji/jars`; an old `log4j-api` there broke Fiji's WebDAV uploader
-  (`commons-logging` 1.3.x calls newer Log4j API). `log4j:log4j` 1.x is excluded from
-  `imagej-common` for the same reason (Fiji ships `reload4j`). Seg2Tracks logs nothing via Log4j.
-  After changing dependencies, check `mvn install`'s "Copying ... to Fiji/jars" lines. If Fiji
-  reports "Cannot create plugin: ...WebDAVUploader", look for stray `log4j-*.jar` in `Fiji/jars`.
+- **`pom.xml` dependencies Fiji already ships must be `<scope>provided</scope>`.** `mvn install`
+  copies every compile/runtime dependency Fiji lacks into `Fiji/jars`. Before 2026-10-07 the
+  ImageJ/SciJava deps were compile scope, so deploys re-added libraries Fiji had dropped,
+  including old `log4j-api`/`log4j-core` 2.14.1 (from an unused direct dependency), which broke
+  Fiji's WebDAV uploader ("Cannot create plugin: ...WebDAVUploader": `commons-logging` 1.3.x calls
+  newer Log4j API). Now only Seg2Tracks + POI and its deps are copied. Never add a logging backend
+  (Seg2Tracks logs nothing via Log4j). After changing dependencies, test the deploy into a dummy
+  folder first: `mvn install -Dscijava.app.directory=/tmp/fakeFiji` and inspect what was copied.
 - **Tab encoding** — some source files use hard tabs. The Edit tool may fail to match indented
   code. Use `sed -i` for single-line substitutions in those files.
 - **`allSegmentationLoaded()`** is the correct hook for any logic that must run after any

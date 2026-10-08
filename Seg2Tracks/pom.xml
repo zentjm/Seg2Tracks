@@ -88,30 +88,29 @@
 		</repository>
 	</repositories>
 	<dependencies>
+		<!-- Libraries Fiji already ships are "provided": compiled against, but not copied into
+		     Fiji/jars by mvn install. Otherwise the deploy re-adds old versions Fiji has dropped
+		     (and once an old log4j that broke Fiji's update-site uploader). Only Seg2Tracks' own
+		     extras (POI and its dependencies) are copied, matching the Seg2Tracks update site. -->
 		<dependency>
 			<groupId>net.imagej</groupId>
 			<artifactId>ij</artifactId>
+			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>net.imagej</groupId>
 			<artifactId>imagej-common</artifactId>
-			<exclusions>
-				<!-- Transitive via imglib2-realtransform/jitk-tps. Fiji ships reload4j (the maintained
-				     replacement with the same classes); copying log4j 1.2.17 into Fiji/jars on
-				     mvn install would duplicate them. Seg2Tracks does not use Log4j. -->
-				<exclusion>
-					<groupId>log4j</groupId>
-					<artifactId>log4j</artifactId>
-				</exclusion>
-			</exclusions>
+			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.scijava</groupId>
 			<artifactId>scijava-common</artifactId>
+			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>net.imagej</groupId>
 			<artifactId>imagej</artifactId>
+			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.poi</groupId>
@@ -126,6 +125,7 @@
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-math3</artifactId>
+			<scope>provided</scope>
 		</dependency>
 	</dependencies>
 	<build>
