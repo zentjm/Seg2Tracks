@@ -33,7 +33,10 @@ header, right of the User Manual / Change Log buttons; deliberately not derived 
 so it keeps showing the last real release while the next version is in development), and replace
 "Publication pending" with "Released <date>" in the ChangeLog/UserManual headers (and the
 UserManual footer line).
-Latest uploaded to the update site: **0.5.3**. Current in-progress version: **0.5.4**.
+Latest uploaded to the update site: **0.5.4** (uploaded 2026-10-07; its docs and header say
+released 2026-10-06). Next version: **0.5.5**; bump `pom.xml`, the doc headers ("Publication
+pending") and add changelog sections with the first change after 0.5.4.
+**Uploading**: done from the command line, dry run first (see "Update site uploads" below).
 **Manual segmentation cannot be tested in the IDE** — requires a live Fiji instance
 (ImageJ's `IJ` singleton and `WindowManager` are not available headless).
 
@@ -63,6 +66,22 @@ that, and still needs the CPU-arch issue solved some other way — e.g. running
 Maven under Rosetta if it's ever installed, or fixing the JDK path). It's only
 for verifying that edited files compile clean before asking the user to build
 and test in Fiji themselves.
+
+**Update site uploads** (`https://sites.imagej.net/Seg2Tracks/`, WebDAV user `zentjm`):
+the user runs the real upload in their own terminal (it prompts for the WebDAV password; never
+handle it). Claude runs the read-only dry run first. Fiji's CLI does not exit on its own, so run
+it backgrounded with a kill after ~150 s:
+```bash
+cd /Applications/Fiji && ./fiji --update upload --simulate --site Seg2Tracks plugins/Seg2Tracks_-<ver>.jar
+```
+- Never use `upload-complete-site`: it marks any locally missing file obsolete, including new
+  **Fiji** files not yet installed (it tried to publish a removal of Fiji's `grpc-googleapis`).
+- To remove a file from the site it must be absent locally; add `--forget-missing-dependencies`
+  when old POI records still depend on it. Don't let the updater *install* a file you mean to
+  remove (that happened on 2026-10-07 and left the removal undone).
+- Keep the core Fiji site enabled next to Seg2Tracks (see memory: disabling it made the updater
+  uninstall Fiji on 2026-10-06).
+- Check the result read-only: `curl -s https://sites.imagej.net/Seg2Tracks/db.xml.gz | gzcat`.
 
 ---
 
