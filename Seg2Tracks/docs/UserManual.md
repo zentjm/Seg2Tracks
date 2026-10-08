@@ -1,6 +1,6 @@
 # Seg2Tracks User Manual
 
-**Version 0.5.4** | *Released 2026-10-06*
+**Version 0.5.5** | *Publication pending*
 
 ---
 
@@ -627,4 +627,4 @@ This was a known issue in versions prior to 0.5.0. The recursion panel now only 
 
 ---
 
-*Seg2Tracks — version 0.5.4, released 2026-10-06*
+*Seg2Tracks — version 0.5.5, publication pending*

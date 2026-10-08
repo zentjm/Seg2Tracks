@@ -34,8 +34,8 @@ so it keeps showing the last real release while the next version is in developme
 "Publication pending" with "Released <date>" in the ChangeLog/UserManual headers (and the
 UserManual footer line).
 Latest uploaded to the update site: **0.5.4** (uploaded 2026-10-07; its docs and header say
-released 2026-10-06). Next version: **0.5.5**; bump `pom.xml`, the doc headers ("Publication
-pending") and add changelog sections with the first change after 0.5.4.
+released 2026-10-06). Current in-progress version: **0.5.5** (bumped 2026-10-07; replace the
+"*No changes yet.*" placeholders in the changelogs with the first change).
 **Uploading**: done from the command line, dry run first (see "Update site uploads" below).
 **Manual segmentation cannot be tested in the IDE** — requires a live Fiji instance
 (ImageJ's `IJ` singleton and `WindowManager` are not available headless).

@@ -11,7 +11,7 @@
 	</parent>
 	<groupId>org.zentjm</groupId>
 	<artifactId>Seg2Tracks_</artifactId>
-	<version>0.5.4</version>
+	<version>0.5.5</version>
 	<name>Seg2Tracks</name>
 	<description>Seg2Tracks plugin for Fiji</description>
 	<url>https://imagej.net/plugins/seg2tracks</url>

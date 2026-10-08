@@ -1,13 +1,19 @@
 # Seg2Tracks Change Log
 
-**Version 0.5.4** | *Released 2026-10-06*
+**Version 0.5.5** | *Publication pending*
 
 A running log of what changed in each version, newest first. For the full user
 guide, use the **User Manual** button.
 
 ---
 
-## What's New in v0.5.4
+## What's New in v0.5.5
+
+*No changes yet.*
+
+---
+
+## What's New in v0.5.4 *(released 2026-10-06)*
 
 ### New segmentation method
 
