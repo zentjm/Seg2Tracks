@@ -354,6 +354,9 @@ data-changing event. `refreshSubsegmentationOnAllPanels()` is always called from
 - **Perimeters are pixel-corner coordinates — always build their ROIs as `Roi.POLYGON`.** ImageJ
   draws line-type ROIs (POLYLINE/FREELINE) with vertices at pixel centres, which shifts a corner-
   coordinate outline half a pixel toward +x/+y (the Preview did this until 2026-10-06).
+- **Guided Calibration "Auto-calibrate from DataSet" appears to do nothing** (user report
+  2026-10-08, not yet investigated). Possibly working without visible feedback. Check both
+  `GuidedCalibration` and `BoundaryCleanupCalibration`.
 - **`ModifiedHungarian.linkAssist()` Javadoc is stale** — says it returns null / is non-functional,
   but it now returns the matrix or throws. Class-level note still calls the implementation incomplete.
 
