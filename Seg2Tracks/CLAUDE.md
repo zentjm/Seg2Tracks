@@ -557,6 +557,10 @@ missing from config, commented-out binary segmentation. Still open, all low impa
   (Item 4 of "Redraw UI fixes", the grabbable vertex count of the editable starting shape, no
   longer applies: since 2026-09-24 Redraw shows the old outline as a non-editable reference.)
 - [ ] Help system — `HelpMenuPanel` content + tooltips
+- [ ] **Run metadata in every output** (requested 2026-10-08): saved datasets, exported
+  spreadsheets and overlays should record all settings used (sigma, threshold, recursive
+  tolerance, invert, methods, cleanup parameters, etc.) plus the Seg2Tracks version that produced
+  them, so results are reproducible. Ties in with the batch design (settings as data).
 - [ ] Batch testing macro
 - [ ] ImageJ.net wiki page
 - [ ] **Pass-2 structural rename** — field/method/class renames deferred from Pass-1 (Pass-1
