@@ -104,10 +104,14 @@ Today `ChannelMerger` / `Interactions` take dimensions from the first dataset wi
 1. **Core extraction** — `PipelineSettings`, `Seg2TracksPipeline`, GUI routed through them; shared
    dimension check; golden test proving identical results on Phantom28.
 2. **Batch, single-level** — template export, sample matching + preview, tier-1 analyses, combined
-   spreadsheet, per-sample overlays, saved datasets, run metadata and log.
+   spreadsheet, per-sample overlays, saved datasets, run metadata and log. Also: panels save their
+   method selections **by class name** (one-time migration of the old list-position preferences),
+   and `Seg2TracksClassLoader` fails loudly on a missing class instead of inserting `null`.
 3. **Subsegmentation in batch** — same pattern for `RecursionOperationModel`; skip children whose
    parent failed.
 4. **Tier-2 batch analyses** — framework + a first method; phantom comparison suite as a client.
+
+Later (Pre-v1.0): method discovery via SciJava `@Plugin` instead of `seg2tracks.config`.
 
 ## Open questions
 - Batch dialog layout (panel rows, patterns, preview).

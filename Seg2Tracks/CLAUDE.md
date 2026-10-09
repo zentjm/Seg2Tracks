@@ -570,6 +570,15 @@ missing from config, commented-out binary segmentation. Still open, all low impa
   them, so results are reproducible. Ties in with the batch design (settings as data).
 - [ ] **Batch processing** — design in `design/BatchProcessing.md`. Phase 1 (pipeline core, input
   checks, golden test) done 2026-10-08; phase 2 next (batch command, single-level).
+- [ ] **Method discovery via SciJava `@Plugin`** (agreed 2026-10-08; option B): replace
+  `seg2tracks.config` + `Seg2TracksClassLoader` with SciJava plugin discovery for all method kinds
+  (SARN, internal segmentation, linkage, analysis, tier-2 batch analyses): each base class implements
+  a marker interface (e.g. `SarnMethod extends SciJavaPlugin`), each method gets
+  `@Plugin(type = ..., name = ..., priority = ...)`, dropdowns come from the plugin index (already
+  generated at build: `META-INF/json/org.scijava.plugin.Plugin`). Lets other jars/update sites add
+  methods without touching Seg2Tracks. Do alongside the Pass-2 rename (both touch every method
+  class). Gotcha: Eclipse must have annotation processing on, or the index goes stale when running
+  from Eclipse. Prerequisite (phase 2): selections saved by class name.
 - [ ] ImageJ.net wiki page
 - [ ] **Pass-2 structural rename** — field/method/class renames deferred from Pass-1 (Pass-1
   covered user-facing text, Javadoc only; Pass-2 requires serialization migration):
