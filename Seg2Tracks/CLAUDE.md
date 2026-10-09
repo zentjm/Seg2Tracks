@@ -582,6 +582,11 @@ missing from config, commented-out binary segmentation. Still open, all low impa
   methods without touching Seg2Tracks. Do alongside the Pass-2 rename (both touch every method
   class). Gotcha: Eclipse must have annotation processing on, or the index goes stale when running
   from Eclipse. Prerequisite (phase 2): selections saved by class name.
+- [ ] **GUI size lock-out for multi-input analyses** (agreed 2026-10-08): grey out, in the other
+  input dropdowns of a multi-input analysis, datasets whose width/height/frames differ from the
+  input already chosen (reuse `InputComboBox`); optional warning on a panel whose input differs
+  from panel 1. Keep `pipeline.InputChecks` as the model-level safety net for batch/scripts. Note:
+  no size check existed before 2026-10-08 (searched code and full git history).
 - [ ] ImageJ.net wiki page
 - [ ] **Pass-2 structural rename** — field/method/class renames deferred from Pass-1 (Pass-1
   covered user-facing text, Javadoc only; Pass-2 requires serialization migration):
