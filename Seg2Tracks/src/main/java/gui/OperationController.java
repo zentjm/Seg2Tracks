@@ -407,6 +407,21 @@ public class OperationController {
 	public Sarn getExternalSegmentationMethod() {
 		return externalSegmentationMethods[externalSegmentationSelection];
 	}
+
+	/**
+	 * This panel's current settings as plain data, for the GUI-independent pipeline core
+	 * ({@link pipeline.Seg2TracksPipeline}), batch templates and run metadata. Methods are
+	 * recorded by class name rather than by list position.
+	 */
+	public pipeline.PipelineSettings toPipelineSettings() {
+		return new pipeline.PipelineSettings(
+				getGaussianBlurSigma(), getMaximumFinderTolerance(), getRecursiveTolerancePct(),
+				getInvertIntensity(), getSearchFraction(), getSearchCeiling(),
+				getSimplificationEpsilon(), getExcludeInternalEdges(),
+				getExternalSegmentationMethod().getClass().getName(),
+				getInternalSegmentationMethod().getClass().getName(),
+				getLinkageMethod().getClass().getName());
+	}
 	
 	//Returns whether internal segmentation is externally dependent
 	public boolean isExternallyDependent() {

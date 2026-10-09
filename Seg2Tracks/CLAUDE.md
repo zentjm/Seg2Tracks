@@ -98,6 +98,7 @@ cd /Applications/Fiji && ./fiji --update upload --simulate --site Seg2Tracks plu
 | `dataStructure` | `DataSet`, `RecursiveDataSet`, `LinkSet`, `FrameSet`, `Segment` | Core data model |
 | `geometricTools` | `GeometricCalculations`, `ModifiedWand`, `ModifiedAutoThresholder`, `ModifiedMaximumFinder`, `PolarPoint` | Geometric utilities and modified ImageJ tools |
 | `util` | `FileResourcesUtil`, `FileSelectionPanel`, `Seg2TracksClassLoader` | Utilities |
+| `pipeline` | `PipelineSettings`, `Seg2TracksPipeline`, `InputChecks` | GUI-independent pipeline core (batch, tests; see `design/BatchProcessing.md`) |
 
 ---
 
@@ -310,6 +311,12 @@ data-changing event. `refreshSubsegmentationOnAllPanels()` is always called from
   newer Log4j API). Now only Seg2Tracks + POI and its deps are copied. Never add a logging backend
   (Seg2Tracks logs nothing via Log4j). After changing dependencies, test the deploy into a dummy
   folder first: `mvn install -Dscijava.app.directory=/tmp/fakeFiji` and inspect what was copied.
+- **The automatic pipeline lives in `pipeline.Seg2TracksPipeline`**; `OperationModel`'s steps
+  only call it (with the panel's method instances and `controller.toPipelineSettings()`). Change
+  algorithm wiring there, not in the GUI, so batch and tests stay in step. `RecursionOperationModel`
+  still has its own five step overrides (phase 3 of the batch design). Run `mvn test` after
+  pipeline or algorithm changes: `Seg2TracksPipelineTest.phantom28GoldenResult` fails on *any*
+  change to results; if the change is intended, check the results and update the fingerprint.
 - **Tab encoding** — some source files use hard tabs. The Edit tool may fail to match indented
   code. Use `sed -i` for single-line substitutions in those files.
 - **`allSegmentationLoaded()`** is the correct hook for any logic that must run after any
@@ -561,7 +568,8 @@ missing from config, commented-out binary segmentation. Still open, all low impa
   spreadsheets and overlays should record all settings used (sigma, threshold, recursive
   tolerance, invert, methods, cleanup parameters, etc.) plus the Seg2Tracks version that produced
   them, so results are reproducible. Ties in with the batch design (settings as data).
-- [ ] Batch testing macro
+- [ ] **Batch processing** — design in `design/BatchProcessing.md`. Phase 1 (pipeline core, input
+  checks, golden test) done 2026-10-08; phase 2 next (batch command, single-level).
 - [ ] ImageJ.net wiki page
 - [ ] **Pass-2 structural rename** — field/method/class renames deferred from Pass-1 (Pass-1
   covered user-facing text, Javadoc only; Pass-2 requires serialization migration):

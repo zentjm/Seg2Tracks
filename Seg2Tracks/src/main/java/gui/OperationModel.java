@@ -5,11 +5,9 @@ import java.util.Observable;
 import javax.swing.JProgressBar;
 
 import dataStructure.DataSet;
-import identification.Identification;
-import ij.IJ;
+import pipeline.PipelineSettings;
+import pipeline.Seg2TracksPipeline;
 import ij.ImageStack;
-import ij.plugin.filter.GaussianBlur;
-import geometricTools.ModifiedMaximumFinder;
 import linkage.Linkage;
 import sarn.Sarn;
 import segmentation.Segmentation;
@@ -68,22 +66,8 @@ public class OperationModel extends Observable{
 		
 		//System.out.println("Opening... " + controller.getInputFilePath());
 		
-		// Load the full image stack into memory so each pipeline stage reads from RAM
-		// rather than reloading from disk, and so a single inversion pass covers all stages.
-		ImageStack virtualStack = IJ.openVirtual(controller.getInputFilePath()).getImageStack();
-		inputStack = new ImageStack(virtualStack.getWidth(), virtualStack.getHeight());
-		for (int i = 1; i <= virtualStack.getSize(); i++) {
-			inputStack.addSlice(virtualStack.getProcessor(i).duplicate());
-		}
-
-		// Apply intensity inversion once here before any stage touches the stack.
-		// Identification, Sarn, and Segmentation all work on per-frame duplicates,
-		// so this in-memory copy stays clean across the full pipeline.
-		if (controller.getInvertIntensity()) {
-			for (int i = 1; i <= inputStack.getSize(); i++) {
-				inputStack.getProcessor(i).invert();
-			}
-		}
+		// Load the full stack into memory (inverted once if requested) before any stage runs.
+		inputStack = Seg2TracksPipeline.loadStack(controller.getInputFilePath(), controller.getInvertIntensity());
 	
 		//loads a new dataSet if none exists
 		if (controller.getDataSet() == null) dataSet = new DataSet(inputStack.getWidth(), inputStack.getHeight(), inputStack.getSize());
@@ -114,59 +98,41 @@ public class OperationModel extends Observable{
 		controller.operationComplete();
 	}
 
+	// ── Steps ────────────────────────────────────────────────────────────────
+	// Each step runs through the GUI-independent pipeline core (pipeline.Seg2TracksPipeline),
+	// with this panel's current settings and its own method instances. RecursionOperationModel
+	// overrides runIdentification/runExternalSegmentation and reuses the other three.
+
+	/** This panel's current settings (read fresh for each step, as before). */
+	protected PipelineSettings settings() {
+		return controller.toPipelineSettings();
+	}
+
 	//Identifies points
 	protected void runIdentification() {
-		
-		progressBar.setMinimum(0);
-		progressBar.setMaximum(inputStack.getSize());
-		progressBar.setValue(0);
-	
-		Identification id = new Identification();
-		id.initialize(inputStack, dataSet, progressBar);
-		id.setBlur(new GaussianBlur(), controller.getGaussianBlurSigma());
-		id.setFinder(new ModifiedMaximumFinder(), controller.getMaximumFinderTolerance());
-		id.setRecursiveTolerancePct(controller.getRecursiveTolerancePct());
-
-		id.run();
-		dataSet.setIdentificationExists(true);
+		Seg2TracksPipeline.identify(inputStack, dataSet, settings(), progressBar);
 	}
 	
 	//Runs an automatic External Segmentation Operation
 	protected void runExternalSegmentation() {	
-		Sarn exSeg = controller.getExternalSegmentationMethod();
-		exSeg.initialize(inputStack, dataSet, progressBar);
-		exSeg.setBlur(new GaussianBlur(), controller.getGaussianBlurSigma()); //XXX: Is this the best implemented?
-		exSeg.setCleanupParams(controller.getSearchFraction(), controller.getSearchCeiling(), controller.getSimplificationEpsilon());
-		exSeg.run();
-		dataSet.setExternalSegmentationExists(true);
+		Seg2TracksPipeline.segmentExternal(inputStack, dataSet, settings(),
+				controller.getExternalSegmentationMethod(), progressBar);
 	}
 	
 	//Runs the Internal Segmentation Operation
 	protected void runInternalSegmentation() {
-		Segmentation inSeg = controller.getInternalSegmentationMethod();
-		inSeg.initialize(inputStack, dataSet, progressBar);
-		inSeg.setBlur(new GaussianBlur(), controller.getGaussianBlurSigma()); //XXX: Is this the best implemented?
-		inSeg.setCleanupParams(controller.getSearchFraction(), controller.getSearchCeiling(), controller.getSimplificationEpsilon());
-		inSeg.run();
-		dataSet.setInternalSegmentationExists(true);
+		Seg2TracksPipeline.segmentInternal(inputStack, dataSet, settings(),
+				controller.getInternalSegmentationMethod(), progressBar);
 	}
 	
 	//Runs the Linkage Operation
 	protected void runLinkage() {
-		Linkage link = controller.getLinkageMethod();
-		link.initialize(dataSet, progressBar);
-		link.run();
-		dataSet.setLinkageExists(true);
+		Seg2TracksPipeline.link(dataSet, controller.getLinkageMethod(), progressBar);
 	}
 	
 	//Runs Segmentation Filters
 	protected void runSegmentationFilters() {
-		SegmentationFilters filter = new SegmentationFilters(); //Todo select
-		filter.initialize(dataSet, progressBar, controller.getExcludeInternalEdges());
-		//System.out.println("Exclude edges is: " + controller.getExcludeInternalEdges());
-		filter.run();
-		
-		//filter.excludeEdges(dataSet, controller.getExcludeInternalEdges());
+		Seg2TracksPipeline.filter(dataSet, settings(), progressBar);
 	}
 	
 	

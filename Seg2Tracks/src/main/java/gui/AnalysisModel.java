@@ -101,6 +101,10 @@ public class AnalysisModel extends Observable {
 		// Initiates analysis method
 		AnalysisMethod analysis = controller.getAnalysisMethod();
 
+		// Inputs must exist and, when combining panels, share width, height and frame count
+		// (analyses take the dimensions from the first input). Reported as a plain message.
+		pipeline.InputChecks.requireSameDimensions(dataSets);
+
 		// Initializes analysis with target image and segmented dataSets
 		if (override) analysis.initialize(targetPlus, dataSets, progressBar);
 		else analysis.initialize(targetPlus, dataSets, progressBar, workbook);

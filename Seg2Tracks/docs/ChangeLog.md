@@ -9,7 +9,14 @@ guide, use the **User Manual** button.
 
 ## What's New in v0.5.5
 
-*No changes yet.*
+### Analysis and segmentation
+
+- Analyses that combine panels now check that the inputs have the same width, height and number of frames, and explain clearly if they don't (or if an input has no data), instead of giving wrong results or failing.
+- Running a **Restricted** internal segmentation method before SARN now explains that SARN has to be run first.
+
+### Behind the scenes
+
+- The automatic segmentation pipeline now runs independently of the main window. Results are unchanged; this is groundwork for batch processing.
 
 ---
 

@@ -127,6 +127,12 @@
 			<artifactId>commons-math3</artifactId>
 			<scope>provided</scope>
 		</dependency>
+		<!-- Tests only (mvn test); never packaged or copied into Fiji. -->
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 	<build>
 		<resources>

@@ -9,7 +9,27 @@ Version numbers follow `MAJOR.MINOR.PATCH`.
 
 ## [0.5.5] — Unreleased
 
-*No changes yet.*
+### Changed
+
+- **GUI-independent pipeline core** (batch processing, phase 1; see `design/BatchProcessing.md`):
+  new `pipeline` package. `PipelineSettings` holds one panel's settings as plain data (methods by
+  class name, with a properties text form for batch templates and run metadata);
+  `Seg2TracksPipeline` runs identification, SARN, internal segmentation, linkage and filters, one
+  method per step plus `runAll()`. `OperationModel`'s steps now call it with the panel's own
+  method instances (`OperationController.toPipelineSettings()`), so GUI results are unchanged:
+  verified identical on Phantom28 against the pre-refactor step sequence.
+- **Automated tests**: JUnit (test scope only) and `src/test/java/pipeline/Seg2TracksPipelineTest`
+  — settings round-trip, input checks, and a golden Phantom28 fingerprint of the full pipeline
+  (skipped if the phantom is not on the machine). Run with `mvn test`.
+
+### Fixed
+
+- **Analyses combining panels did not check that the inputs match** — e.g. `ChannelMerger` and
+  `Interactions` took width, height and frame count from the first input. Every analysis now runs
+  `InputChecks.requireSameDimensions()` first: a plain "Cannot Run Analysis" message lists each
+  input's size if they differ, or names an input with no data.
+- **A Restricted internal method run without SARN** now explains that SARN must be run first
+  (plain "Cannot Run Operation" message) instead of failing on missing boundaries.
 
 ---
 
